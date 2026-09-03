@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# local agent tooling (kept locally, not part of the submission)
+CLAUDE.md
+.commandcode/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

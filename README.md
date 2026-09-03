@@ -4,6 +4,10 @@ Kinship is a course-delivery workspace for internal training teams. Instructors 
 
 This project implements the ten assignment areas: role-based accounts, course and lesson management, lifecycle/progress state rules, many-to-many enrollment, server-side discovery, bulk enrollment and CSV export, instructor dashboard metrics, immutable activity history, and inactivity alerts. Optional stretch features were intentionally left out.
 
+## How it's built
+
+Next.js App Router monolith: client components call this app's own route handlers under `src/app/api`, which own every read and mutation; Supabase Auth holds email/password sessions and Postgres holds the data. Authorization is layered three deep — role checks in the route handlers, row-level security policies in Postgres, and database triggers that reject illegal course/progress state transitions — and the course activity log is append-only by policy, so history cannot be rewritten by any role. See [`docs/architecture.md`](./docs/architecture.md) for the end-to-end request path and [`docs/schema.md`](./docs/schema.md) for every table and constraint.
+
 ## Run locally
 
 ```bash
@@ -11,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The dashboard includes deterministic demo data so the interface can be reviewed without credentials. The `/login` page lists the seeded demo accounts and shared demo password.
+Open `http://localhost:3000` and sign in with one of the 20 seeded demo accounts — shared password `Demo123!` — listed in [`SUBMISSION.md`](./SUBMISSION.md). The app requires the Supabase environment variables; there is no offline demo mode.
 
 ## Supabase setup
 
@@ -34,7 +38,7 @@ The build uses webpack because the execution environment used for this take-home
 
 ## Deploy on Vercel
 
-Import the GitHub repository with the Vercel project root set to `.`. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` as production environment variables, then deploy the `main` branch. The repository includes [`vercel.json`](./vercel.json) with the install and build commands. Add the resulting Vercel URL to Supabase Auth → URL Configuration and to [`SUBMISSION.md`](./SUBMISSION.md).
+Import the GitHub repository with the Vercel project root set to `.`. Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` as production environment variables (the service-role key backs three audited server-side reads/writes — learner enrollment history, instructor roster reads, and enrollment inserts made on a learner's behalf — and is never exposed to the browser), then deploy the `main` branch. The repository includes [`vercel.json`](./vercel.json) with the install and build commands. Add the resulting Vercel URL to Supabase Auth → URL Configuration and to [`SUBMISSION.md`](./SUBMISSION.md).
 
 ## Submission notes
 
