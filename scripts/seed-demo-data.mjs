@@ -109,6 +109,7 @@ async function run() {
   const authIds = await ensureAuthUsers();
 
   // Remove any stale/partial demo data so the seed below is the single source of truth.
+  await clearTable("enrollment_requests");
   await clearTable("lesson_completions");
   await clearTable("alert_dismissals");
   await clearTable("enrollments");
@@ -174,6 +175,20 @@ async function run() {
   });
   const { error: completionError } = await supabase.from("lesson_completions").upsert(completionRows, { onConflict: "enrollment_id,lesson_id", ignoreDuplicates: true });
   if (completionError) throw new Error(`Lesson completions: ${completionError.message}`);
+
+  const requestRows = [
+    { course_id: courseUuid(5), learner_id: learnerByEmail.get("elena@northstar.co").id, status: "pending" },
+    { course_id: courseUuid(9), learner_id: learnerByEmail.get("grace@northstar.co").id, status: "pending" },
+    {
+      course_id: courseUuid(7),
+      learner_id: learnerByEmail.get("mateo@northstar.co").id,
+      status: "rejected",
+      decided_at: daysAgo(2),
+      decided_by: profileByEmail.get("owen@northstar.co"),
+    },
+  ];
+  const { error: requestError } = await supabase.from("enrollment_requests").insert(requestRows);
+  if (requestError && requestError.code !== "PGRST205") throw new Error(`Enrollment requests: ${requestError.message}`);
 
   const activityRows = courses.map(([no, , , , instructorEmail, status]) => ({
     course_id: courseUuid(no),

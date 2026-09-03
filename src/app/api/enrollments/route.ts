@@ -23,10 +23,13 @@ export async function POST(request: NextRequest) {
   const courseId = String(body.courseId ?? "");
   if (!courseId) return NextResponse.json({ error: "courseId is required" }, { status: 400 });
 
-  const learnerId = body.learnerId ? String(body.learnerId) : user.id;
-  const instructorEnrolling = hasRole(profile, "instructor") && learnerId !== user.id;
-  if (learnerId !== user.id && !hasRole(profile, "instructor")) return NextResponse.json({ error: "Only instructors can enroll another learner" }, { status: 403 });
-  if (hasRole(profile, "instructor") && !body.learnerId) return NextResponse.json({ error: "Choose a learner to enroll" }, { status: 400 });
+  if (!hasRole(profile, "instructor")) {
+    return NextResponse.json({ error: "Request enrollment instead — learners join courses after instructor approval", code: "REQUEST_REQUIRED" }, { status: 403 });
+  }
+
+  const learnerId = String(body.learnerId ?? "");
+  if (!learnerId) return NextResponse.json({ error: "Choose a learner to enroll" }, { status: 400 });
+  const instructorEnrolling = learnerId !== user.id;
 
   const { data: target } = await supabase.from("profiles").select("role").eq("id", learnerId).maybeSingle();
   if (!target) return NextResponse.json({ error: "Learner not found" }, { status: 404 });

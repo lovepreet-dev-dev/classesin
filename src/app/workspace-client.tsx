@@ -90,6 +90,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   const [courseData, setCourseData] = useState<Course[]>([]);
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
   const [enrollmentProgress, setEnrollmentProgress] = useState<Record<string, Progress>>({});
+  const [requestByCourse, setRequestByCourse] = useState<Record<string, string>>({});
   const [people, setPeople] = useState<PersonRow[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
@@ -158,6 +159,16 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
       setEnrolledCourses(rows);
       setEnrollmentProgress(progressByCourse);
     }).catch(() => undefined);
+    fetch("/api/enrollments/requests").then(async (response) => {
+      if (!response.ok) return;
+      const payload = await response.json();
+      const next: Record<string, string> = {};
+      for (const item of (payload.requests ?? []) as { course_id: string; status: string; courses?: { id: string } | null }[]) {
+        const courseId = item.courses && typeof item.courses === "object" && "id" in item.courses ? String(item.courses.id) : String(item.course_id);
+        if (!next[courseId]) next[courseId] = item.status;
+      }
+      setRequestByCourse(next);
+    }).catch(() => undefined);
   }, [isInstructor]);
 
   useEffect(() => {
@@ -224,7 +235,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   }
 
   const totalMatches = serverCount;
-  const table = <CourseTable courses={filtered} role={role} loading={loadingCourses} />;
+  const table = <CourseTable courses={filtered} role={role} loading={loadingCourses} requestByCourse={requestByCourse} enrolledIds={new Set(enrolledCourses.map((course) => course.id))} />;
   const dashboardBreakdown = <DashboardBreakdown dashboard={dashboard} />;
   const navItems = isInstructor
     ? [{ label: "Overview", icon: LayoutDashboard }, { label: "Courses", icon: Library }, { label: "Learners", icon: Users }, { label: "Activity", icon: Activity }]
@@ -340,7 +351,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
             <CourseTable courses={enrolledCourses} role="Learner" loading={false} />
           </section>
         </>)}
-        {active !== "Overview" && <SecondaryView active={active} filtered={filtered} totalMatches={totalMatches} page={page} pageSize={pageSize} setPage={setPage} role={role} query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} people={people} activity={activity} alerts={alerts} onCreate={() => setShowCreate(true)} onBulk={() => setShowBulk(true)} instructors={instructors} coursesLoaded={coursesLoaded} />}
+        {active !== "Overview" && <SecondaryView active={active} filtered={filtered} totalMatches={totalMatches} page={page} pageSize={pageSize} setPage={setPage} role={role} query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} people={people} activity={activity} alerts={alerts} onCreate={() => setShowCreate(true)} onBulk={() => setShowBulk(true)} instructors={instructors} coursesLoaded={coursesLoaded} requestByCourse={requestByCourse} enrolledIds={new Set(enrolledCourses.map((course) => course.id))} />}
       </div>
     </section>
     {showCreate && <CreateModal owner={profile.fullName} onClose={() => setShowCreate(false)} onSave={createCourse} />}
@@ -375,21 +386,21 @@ function CourseToolbar({ query, setQuery, category, setCategory, status, setStat
   </div>;
 }
 
-function CourseTable({ courses, role, loading }: { courses: Course[]; role: "Instructor" | "Learner"; loading: boolean }) {
+function CourseTable({ courses, role, loading, requestByCourse = {}, enrolledIds = new Set<string>() }: { courses: Course[]; role: "Instructor" | "Learner"; loading: boolean; requestByCourse?: Record<string, string>; enrolledIds?: Set<string> }) {
   return <div className="course-table">
     <div className="table-head"><span>Course</span><span>Status</span><span>Learners</span><span>Progress</span><span>Last updated</span><span /></div>
-    {loading ? <CourseTableSkeleton /> : courses.length ? courses.map((course) => <CourseRow key={course.id} course={course} role={role} />) : <EmptyCourseState />}
+    {loading ? <CourseTableSkeleton /> : courses.length ? courses.map((course) => <CourseRow key={course.id} course={course} role={role} requestStatus={requestByCourse[course.id] ?? null} enrolled={enrolledIds.has(course.id) || Boolean(course.progress)} />) : <EmptyCourseState />}
   </div>;
 }
 
-function CourseRow({ course, role }: { course: Course; role: "Instructor" | "Learner" }) {
+function CourseRow({ course, role, requestStatus, enrolled }: { course: Course; role: "Instructor" | "Learner"; requestStatus?: string | null; enrolled?: boolean }) {
   const router = useRouter();
   const values: Record<string, number> = { "Not started": 0, "In progress": 58, Completed: 100, "Not enrolled": 0 };
   const open = () => router.push(`/courses/${course.id}`);
   return <div className="course-row" role="link" tabIndex={0} onClick={open} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } }}>
     <div className="course-title-cell">
       <div className={`course-thumb thumb-${course.accent}`}><FileText size={19} /></div>
-      <div><Link href={`/courses/${course.id}`} className="course-link" onClick={(event) => event.stopPropagation()}>{course.title}</Link><span>{course.category} <i /> {course.lessons} lessons</span></div>
+      <div><Link href={`/courses/${course.id}`} className="course-link" onClick={(event) => event.stopPropagation()}>{course.title}</Link><span>{course.category} <i /> {course.lessons} lessons</span>{role === "Learner" && (enrolled ? <Badge tone="Completed">Enrolled</Badge> : requestStatus === "pending" ? <Badge tone="Draft">Requested</Badge> : requestStatus === "rejected" ? <Badge tone="Archived">Declined</Badge> : null)}</div>
     </div>
     <div><Badge tone={course.status}>{course.status}</Badge></div>
     <div className="learner-count"><Users size={14} /> {course.learners}</div>
@@ -411,12 +422,12 @@ function EmptyCourseState() {
   return <div className="empty-course"><Search size={22} /><strong>No courses match those filters</strong><span>Try a different search or reset the filters.</span></div>;
 }
 
-function SecondaryView({ active, filtered, totalMatches, page, pageSize, setPage, role, query, setQuery, category, setCategory, status, setStatus, instructorFilter, setInstructorFilter, sort, setSort, showFilters, setShowFilters, clearFilters, people, activity, alerts, onCreate, onBulk, instructors, coursesLoaded }: {
+function SecondaryView({ active, filtered, totalMatches, page, pageSize, setPage, role, query, setQuery, category, setCategory, status, setStatus, instructorFilter, setInstructorFilter, sort, setSort, showFilters, setShowFilters, clearFilters, people, activity, alerts, onCreate, onBulk, instructors, coursesLoaded, requestByCourse = {}, enrolledIds = new Set<string>() }: {
   active: string; filtered: Course[]; totalMatches: number; page: number; pageSize: number; setPage: (value: number) => void; role: "Instructor" | "Learner";
   query: string; setQuery: (value: string) => void; category: string; setCategory: (value: string) => void; status: string; setStatus: (value: string) => void;
   instructorFilter: string; setInstructorFilter: (value: string) => void; sort: string; setSort: (value: string) => void;
   showFilters: boolean; setShowFilters: (value: boolean) => void; clearFilters: () => void;
-  people: PersonRow[]; activity: ActivityItem[]; alerts: Alert[]; onCreate: () => void; onBulk: () => void; instructors: InstructorOption[]; coursesLoaded: boolean;
+  people: PersonRow[]; activity: ActivityItem[]; alerts: Alert[]; onCreate: () => void; onBulk: () => void; instructors: InstructorOption[]; coursesLoaded: boolean; requestByCourse?: Record<string, string>; enrolledIds?: Set<string>;
 }) {
   const isInstructor = role === "Instructor";
   const totalPages = Math.max(1, Math.ceil(totalMatches / pageSize));
@@ -433,7 +444,7 @@ function SecondaryView({ active, filtered, totalMatches, page, pageSize, setPage
     </div>
     {active === "Courses" ? <section className="panel course-panel">
       <CourseToolbar query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} instructors={instructors} />
-      <CourseTable courses={visibleCourses} role={role} loading={!coursesLoaded} />
+      <CourseTable courses={visibleCourses} role={role} loading={!coursesLoaded} requestByCourse={requestByCourse} enrolledIds={enrolledIds} />
       <div className="pagination">
         <span>Showing {totalMatches ? ((page - 1) * pageSize) + 1 : 0}–{Math.min(page * pageSize, totalMatches)} of {totalMatches} courses</span>
         <div>

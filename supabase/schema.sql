@@ -29,7 +29,7 @@ create table public.lesson_completions (
   id uuid primary key default gen_random_uuid(), enrollment_id uuid not null references public.enrollments(id) on delete cascade, lesson_id uuid not null references public.lessons(id) on delete cascade, completed_at timestamptz not null default now(),
   unique(enrollment_id, lesson_id)
 );
-create type public.activity_event as enum ('created', 'edited', 'published', 'archived', 'restored', 'commented', 'lesson_completed', 'enrolled', 'alert_dismissed');
+create type public.activity_event as enum ('created', 'edited', 'published', 'archived', 'restored', 'commented', 'lesson_completed', 'enrolled', 'enrollment_requested', 'enrollment_rejected', 'alert_dismissed');
 create table public.course_activity_log (
   id uuid primary key default gen_random_uuid(), course_id uuid not null references public.courses(id) on delete cascade, actor_id uuid references public.profiles(id), event public.activity_event not null,
   message text, metadata jsonb not null default '{}'::jsonb, created_at timestamptz not null default now()
@@ -99,3 +99,39 @@ create policy "own completions" on public.lesson_completions for all to authenti
 create policy "course activity visible" on public.course_activity_log for select to authenticated using (public.current_role() = 'instructor' or exists (select 1 from enrollments e where e.course_id = course_id and e.learner_id = auth.uid()));
 create policy "append activity" on public.course_activity_log for insert to authenticated with check (actor_id = auth.uid() and (public.current_role() = 'instructor' or exists (select 1 from enrollments e where e.course_id = course_id and e.learner_id = auth.uid())));
 create policy "instructors manage dismissals" on public.alert_dismissals for all to authenticated using (public.current_role() = 'instructor') with check (public.current_role() = 'instructor');
+
+create type public.enrollment_request_status as enum ('pending', 'approved', 'rejected');
+
+create table public.enrollment_requests (
+  id uuid primary key default gen_random_uuid(),
+  course_id uuid not null references public.courses(id) on delete cascade,
+  learner_id uuid not null references public.profiles(id) on delete cascade,
+  status public.enrollment_request_status not null default 'pending',
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  decided_by uuid references public.profiles(id)
+);
+
+create unique index enrollment_requests_pending_uniq
+  on public.enrollment_requests (course_id, learner_id)
+  where status = 'pending';
+
+create index enrollment_requests_course_idx on public.enrollment_requests(course_id, status);
+
+alter table public.enrollment_requests enable row level security;
+
+create policy "participants view requests" on public.enrollment_requests for select to authenticated using (
+  learner_id = auth.uid()
+  or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
+);
+
+create policy "learners request enrollment" on public.enrollment_requests for insert to authenticated with check (
+  learner_id = auth.uid()
+  and exists (select 1 from public.courses c where c.id = course_id and c.status = 'published')
+);
+
+create policy "course instructor decides" on public.enrollment_requests for update to authenticated using (
+  exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
+) with check (
+  exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
+);

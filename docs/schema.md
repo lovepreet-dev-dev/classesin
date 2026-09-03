@@ -9,6 +9,7 @@ Tables:
 - `lesson_completions(id uuid, enrollment_id uuid FK enrollments, lesson_id uuid FK lessons, completed_at)`, with unique `(enrollment_id, lesson_id)`.
 - `course_activity_log(id uuid, course_id uuid, actor_id uuid, event activity_event, message text, metadata jsonb, created_at)`. It is append-only.
 - `alert_dismissals(id uuid, enrollment_id uuid, dismissed_by uuid, dismissed_at, dismissed_for_progress_at)`.
+- `enrollment_requests(id uuid, course_id uuid FK courses, learner_id uuid FK profiles, status enrollment_request_status, created_at, decided_at, decided_by FK profiles)`, with a partial unique index so only one pending request exists per (course, learner).
 
 Courses→lessons, courses→enrollments, and profiles→courses are one-to-many. Learners↔courses are many-to-many through enrollments; enrollments↔lessons are many-to-many through lesson_completions.
 
