@@ -495,8 +495,9 @@ function CreateModal({ owner, onClose, onSave }: { owner: string; onClose: () =>
     catch (e) { setError(e instanceof Error ? e.message : "Could not create course"); }
     finally { setSaving(false); }
   }
-  return <div className="modal-backdrop">
-    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="create-course-title">
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [onClose]);
+  return <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="create-course-title" onClick={(event) => event.stopPropagation()}>
       <div className="modal-header"><div><p className="eyebrow">Course builder</p><h2 id="create-course-title">Create a course</h2></div><button className="icon-button subtle" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></div>
       <p className="modal-copy">Start with the essentials. Add lessons in the course builder before publishing.</p>
       <label>Course title<input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Security foundations" /></label>
@@ -543,8 +544,9 @@ function BulkModal({ courses, onClose, onSave }: { courses: Course[]; onClose: (
     }
   }
   const statusLabel: Record<BulkResult["status"], string> = { newly_enrolled: "Newly enrolled", already_enrolled: "Already enrolled", unknown: "Unknown address", error: "Could not process" };
-  return <div className="modal-backdrop">
-    <div className="modal bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-title">
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [onClose]);
+  return <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-title" onClick={(event) => event.stopPropagation()}>
       <div className="modal-header"><div><p className="eyebrow">Enrollment tools</p><h2 id="bulk-title">Bulk enroll learners</h2></div><button className="icon-button subtle" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></div>
       {results ? <>
         <p className="modal-copy">Each address has been checked. Nothing is hidden when an address is unknown or already enrolled.</p>
