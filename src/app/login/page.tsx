@@ -1,0 +1,12 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, GraduationCap, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+
+export default function LoginPage() {
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [loading, setLoading] = useState(false); const router = useRouter();
+  async function submit(event: FormEvent) { event.preventDefault(); setLoading(true); setError(""); try { const supabase = createClient(); const { error: authError } = await supabase.auth.signInWithPassword({ email, password }); if (authError) throw authError; router.push("/"); } catch (e) { setError(e instanceof Error ? e.message : "Sign in failed. Check your credentials."); } finally { setLoading(false); } }
+  return <main className="login-shell"><div className="login-art"><div className="brand login-brand"><span className="brand-mark"><GraduationCap size={21} /></span><span>kinship<span className="brand-dot">.</span></span></div><div className="login-quote"><p className="eyebrow">Learning, made human</p><h1>Small moments of progress add up to meaningful change.</h1><p>Give every learner a clear path forward — and every instructor a view of the momentum.</p></div><div className="login-art-footer"><span><ShieldCheck size={15} /> Private by default</span><span>© 2024 Kinship</span></div></div><div className="login-card-wrap"><div className="login-card"><p className="eyebrow">Welcome back</p><h2>Sign in to your workspace</h2><p className="login-sub">Use the email and password configured for your Supabase Auth account.</p><form onSubmit={submit}><label>Email address<div className="input-with-icon"><Mail size={16} /><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" /></div></label><label>Password<div className="input-with-icon"><LockKeyhole size={16} /><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></div></label>{error && <p className="login-error">{error}</p>}<button className="button button-primary login-submit" disabled={loading}>{loading ? "Signing in…" : <>Sign in <ArrowRight size={16} /></>}</button></form><div className="demo-note"><strong>Demo accounts</strong><span>Instructor: maya@northstar.co</span><span>Learner: elena@northstar.co</span></div></div></div></main>;
+}
