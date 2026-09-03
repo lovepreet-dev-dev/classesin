@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { DEMO_ACTIVITY, DEMO_COURSES, DEMO_LEARNERS, demoLessons } from "@/lib/demo-data";
 import CourseDetailClient from "./course-detail-client";
 
@@ -19,20 +20,40 @@ export default async function CoursePage({ params }: { params: Promise<{ courseI
     .select("id,title,description,category,status,profiles!courses_instructor_id_fkey(full_name),lessons(id,title,content,position)")
     .eq("id", courseId)
     .single();
-  if (!course) notFound();
 
   const { data: { user } } = await supabase.auth.getUser();
   let viewerRole: "instructor" | "learner" | null = null;
+  let viewerName: string | undefined;
   let enrollment = null;
   let completedLessonIds: string[] = [];
   let learners: { id: string; full_name: string; email: string }[] = [];
   let activities: { id: string; event: string; message: string | null; created_at: string; actor?: { full_name?: string } | { full_name?: string }[] }[] = [];
+  let courseRow = course;
 
   if (user) {
-    const { data: viewer } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    const { data: viewer } = await supabase.from("profiles").select("role,full_name").eq("id", user.id).maybeSingle();
     viewerRole = viewer?.role ?? null;
+    viewerName = viewer?.full_name;
 
-    if (viewerRole === "learner") {
+    // RLS hides archived courses from learners. A learner who is enrolled keeps
+    // read access to that course, so re-fetch it through the service role.
+    if (!courseRow && viewerRole === "learner") {
+      const service = createServiceClient();
+      const { data: own } = await service.from("enrollments").select("id,progress").eq("course_id", courseId).eq("learner_id", user.id).maybeSingle();
+      if (own) {
+        enrollment = own;
+        const { data: historyCourse } = await service
+          .from("courses")
+          .select("id,title,description,category,status,profiles!courses_instructor_id_fkey(full_name),lessons(id,title,content,position)")
+          .eq("id", courseId)
+          .single();
+        courseRow = historyCourse;
+        const { data: completions } = await service.from("lesson_completions").select("lesson_id").eq("enrollment_id", own.id);
+        completedLessonIds = (completions ?? []).map((completion) => completion.lesson_id);
+      }
+    }
+
+    if (viewerRole === "learner" && !enrollment) {
       const { data } = await supabase.from("enrollments").select("id,progress").eq("course_id", courseId).eq("learner_id", user.id).maybeSingle();
       enrollment = data;
       if (data) {
@@ -46,17 +67,22 @@ export default async function CoursePage({ params }: { params: Promise<{ courseI
       learners = learnerRows ?? [];
     }
 
-    const { data: activityRows } = await supabase.from("course_activity_log").select("id,event,message,created_at,actor:profiles(full_name)").eq("course_id", courseId).order("created_at", { ascending: false }).limit(20);
-    activities = activityRows ?? [];
+    if (courseRow) {
+      const { data: activityRows } = await supabase.from("course_activity_log").select("id,event,message,created_at,actor:profiles(full_name)").eq("course_id", courseId).order("created_at", { ascending: false }).limit(20);
+      activities = activityRows ?? [];
+    }
   }
 
-  const profile = Array.isArray(course.profiles) ? course.profiles[0] : course.profiles;
+  if (!courseRow) notFound();
+
+  const profile = Array.isArray(courseRow.profiles) ? courseRow.profiles[0] : courseRow.profiles;
   return <CourseDetailClient
-    course={{ ...course, instructor: (profile as { full_name?: string } | null)?.full_name, lessons: [...(course.lessons ?? [])].sort((a, b) => a.position - b.position) }}
+    course={{ ...courseRow, instructor: (profile as { full_name?: string } | null)?.full_name, lessons: [...(courseRow.lessons ?? [])].sort((a, b) => a.position - b.position) }}
     enrollment={enrollment}
     completedLessonIds={completedLessonIds}
     viewerRole={viewerRole}
     learners={learners}
     activities={activities}
+    viewerName={viewerName}
   />;
 }
