@@ -72,4 +72,7 @@ Add automated Supabase integration tests and move dashboard aggregate metrics to
 
 ## What are you least happy with in this codebase, and why?
 
-The overview still keeps a small deterministic fallback fixture so the UI remains reviewable if Supabase is temporarily unavailable; authenticated requests use the server routes and RLS-backed data path.
+Catalogue sorting and pagination run inside the route handler rather than SQL `order()/range()`,
+and the dashboard aggregates enrollments in server code rather than a SQL `group by`. Both are
+correct server-side behavior, but they re-read all matching rows per request; the 100× plan for
+moving them into SQL is documented in `docs/architecture.md`.

@@ -54,5 +54,5 @@ the data it would move to SQL `order()/range()` plus `count(head: true)` and a f
 Quizzes, certificates, per-lesson discussion threads, video with watch-progress tracking, ratings,
 learning paths, downloadable resources, email digests, and any background scheduler. Inactivity
 alerts are a deterministic query over `last_progress_at` plus a dismissal snapshot, so no worker
-process is needed. `src/lib/demo-data.ts` keeps a deterministic fixture so the UI stays reviewable
-if Supabase is temporarily unreachable; every authenticated path uses the real routes and RLS.
+process is needed. There is no client-side demo fixture either: when the backend is unreachable the
+app fails visibly, so every action has exactly one code path through the routes and RLS.

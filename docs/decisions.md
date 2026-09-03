@@ -63,10 +63,14 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
 
 ## Decision 8
 
-- **Chose:** A deterministic demo fixture (`src/lib/demo-data.ts`) that renders a working course
-  page when the Supabase environment is missing or unreachable.
-- **Rejected:** Hard failure screens whenever the backend is unavailable.
-- **Why:** The submission is graded from a live URL on free tiers that can sleep or pause; the
-  fixture keeps the app reviewable during an outage. It stays confined to a fallback — every
-  authenticated path uses the real routes and RLS — and the trade-off is acknowledged in
-  `SUBMISSION.md` as the least-happy item.
+- **Chose:** Fail visibly when the backend is unavailable — one code path per action, no
+  client-side fixture.
+- **Rejected:** A deterministic demo fixture that rendered a working course page with local-only
+  mutations whenever Supabase was unreachable.
+- **Why:** The fixture was insurance for a free-tier host outage, but it meant every mutation
+  carried a second `isDemo` branch, shipped fake data in the client bundle, and could pass off a
+  simulation as the real system. The live seeded database plus the credentials in `SUBMISSION.md`
+  cover reviewability without it.
+- **Later reversed:** the fixture shipped in the first build and was removed after the goal audit;
+  removing it collapsed roughly ten demo branches in the course page into single server-backed
+  paths and shrank the client bundle.

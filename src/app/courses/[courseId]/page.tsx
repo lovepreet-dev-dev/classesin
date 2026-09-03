@@ -1,19 +1,14 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { DEMO_ACTIVITY, DEMO_COURSES, DEMO_LEARNERS, demoLessons } from "@/lib/demo-data";
 import CourseDetailClient from "./course-detail-client";
+
+type RosterEntry = { id: string; fullName: string; email: string; progress: string; completedLessons: number };
 
 export const dynamic = "force-dynamic";
 
 export default async function CoursePage({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    const demoCourse = DEMO_COURSES.find((item) => item.id === courseId);
-    if (!demoCourse) notFound();
-    return <CourseDetailClient course={{ ...demoCourse, status: demoCourse.status.toLowerCase(), lessons: demoLessons(courseId) }} enrollment={null} completedLessonIds={[]} viewerRole="instructor" learners={DEMO_LEARNERS.map((person) => ({ id: person.id, full_name: person.fullName, email: person.email }))} activities={DEMO_ACTIVITY.filter((item) => item.courseId === courseId).map((item) => ({ id: item.id, event: item.event, message: item.d, created_at: new Date().toISOString() }))} demoMode />;
-  }
-
   const supabase = await createClient();
   const { data: course } = await supabase
     .from("courses")
@@ -27,6 +22,7 @@ export default async function CoursePage({ params }: { params: Promise<{ courseI
   let enrollment = null;
   let completedLessonIds: string[] = [];
   let learners: { id: string; full_name: string; email: string }[] = [];
+  let roster: RosterEntry[] = [];
   let activities: { id: string; event: string; message: string | null; created_at: string; actor?: { full_name?: string } | { full_name?: string }[] }[] = [];
   let courseRow = course;
 
@@ -65,6 +61,24 @@ export default async function CoursePage({ params }: { params: Promise<{ courseI
     if (viewerRole === "instructor") {
       const { data: learnerRows } = await supabase.from("profiles").select("id,full_name,email").eq("role", "learner").order("full_name");
       learners = learnerRows ?? [];
+      // RLS lets instructors read enrollments but not other learners'
+      // lesson_completions, so the roster's completion counts come through
+      // the service role after the instructor check above.
+      const service = createServiceClient();
+      const { data: rosterRows } = await service
+        .from("enrollments")
+        .select("id,progress,learner:profiles!enrollments_learner_id_fkey(id,full_name,email),lesson_completions(lesson_id)")
+        .eq("course_id", courseId);
+      roster = (rosterRows ?? []).map((row) => {
+        const learner = Array.isArray(row.learner) ? row.learner[0] : row.learner;
+        return {
+          id: row.id,
+          fullName: learner?.full_name ?? "Unknown learner",
+          email: learner?.email ?? "",
+          progress: row.progress,
+          completedLessons: (row.lesson_completions ?? []).length,
+        };
+      });
     }
 
     if (courseRow) {
@@ -82,6 +96,7 @@ export default async function CoursePage({ params }: { params: Promise<{ courseI
     completedLessonIds={completedLessonIds}
     viewerRole={viewerRole}
     learners={learners}
+    roster={roster}
     activities={activities}
     viewerName={viewerName}
   />;
