@@ -4,19 +4,19 @@ Fill this in and commit it. This is the first file we open.
 
 ## Links
 
-- **GitHub repository:** <add after publishing>
-- **Live application:** <add after deploying>
+- **GitHub repository:** https://github.com/lovepreet-dev-dev/classesin
+- **Live application:** https://classesin.vercel.app
 
 ## Notes for the reviewer
 
-The dashboard includes seeded demo states. The Supabase SQL in `supabase/schema.sql` must be run before connecting a hosted instance, followed by `supabase/seed.sql` after the two Auth users exist. If the free host sleeps, the first request may take a minute. Environment setup is documented in [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md); secrets are intentionally ignored by Git.
+The production Vercel deployment is live at the URL above and is connected to the `classesin` Supabase project. The baseline schema, transition-guard migration, and deterministic demo seed have been applied. If the free host sleeps, the first request may take a minute. Environment setup is documented in [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md); secrets are intentionally ignored by Git.
 
 ## Demo credentials
 
 | Role | Email | Password |
 |------|-------|----------|
-| Instructor | maya@northstar.co | <password chosen in Supabase> |
-| Learner | elena@northstar.co | <password chosen in Supabase> |
+| Instructor | maya@northstar.co | Use the password configured for this Supabase Auth user |
+| Learner | elena@northstar.co | Use the password configured for this Supabase Auth user |
 
 ## Stack
 
@@ -50,7 +50,7 @@ Approximately 12 hours across setup, schema/auth, course and learner flows, repo
 
 ## What would you do next, with another 12 hours?
 
-Add automated Supabase integration tests, move dashboard aggregate metrics to database views as data grows, and deploy the app to Vercel with the production environment variables.
+Add automated Supabase integration tests and move dashboard aggregate metrics to database views as data grows.
 
 ## What are you least happy with in this codebase, and why?
 
