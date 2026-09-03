@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { existsSync } from "node:fs";
+
+try {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL && existsSync(".env.local")) process.loadEnvFile(".env.local");
+} catch { /* env already loaded */ }
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -9,7 +9,7 @@ Fill this in and commit it. This is the first file we open.
 
 ## Notes for the reviewer
 
-The production Vercel deployment is live at the URL above and is connected to the `classesin` Supabase project. The expanded seed contains 18 courses, eight lessons per course, four instructors, and 16 learners. Run `npm run seed:demo` with a Supabase service-role key before applying the SQL seed to create/reset the demo Auth accounts. If the free host sleeps, the first request may take a minute. Environment setup is documented in [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md); secrets are intentionally ignored by Git.
+The production Vercel deployment is live at the URL above and is connected to the `classesin` Supabase project. The seed contains 18 courses, eight lessons per course, four instructors, and 16 learners. Run `npm run seed:demo` with a Supabase service-role key to create/reset the demo Auth accounts and apply the full demo dataset in one step. If the free host sleeps, the first request may take a minute. Environment setup is documented in [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md); secrets are intentionally ignored by Git.
 
 ## Demo credentials
 
