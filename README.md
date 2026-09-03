@@ -32,6 +32,10 @@ npm run build
 
 The build uses webpack because the execution environment used for this take-home blocks Turbopack worker ports.
 
+## Deploy on Vercel
+
+Import the GitHub repository with the Vercel project root set to `.`. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` as production environment variables, then deploy the `main` branch. The repository includes [`vercel.json`](./vercel.json) with the install and build commands. Add the resulting Vercel URL to Supabase Auth → URL Configuration and to [`SUBMISSION.md`](./SUBMISSION.md).
+
 ## Submission notes
 
 Architecture, schema, implementation plan, decisions, AI-use history, and the reviewer checklist live under [`docs/`](./docs). Public repository and deployment URLs belong in [`SUBMISSION.md`](./SUBMISSION.md) after hosting is configured.
