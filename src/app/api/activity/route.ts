@@ -10,8 +10,6 @@ const eventTitles: Record<string, string> = {
   commented: "Comment added",
   lesson_completed: "Learner completed lesson",
   enrolled: "Learner enrolled",
-  enrollment_requested: "Enrollment requested",
-  enrollment_rejected: "Enrollment rejected",
   alert_dismissed: "Inactivity alert dismissed",
 };
 
