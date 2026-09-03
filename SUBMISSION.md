@@ -9,14 +9,32 @@ Fill this in and commit it. This is the first file we open.
 
 ## Notes for the reviewer
 
-The production Vercel deployment is live at the URL above and is connected to the `classesin` Supabase project. The baseline schema, transition-guard migration, and deterministic demo seed have been applied. If the free host sleeps, the first request may take a minute. Environment setup is documented in [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md); secrets are intentionally ignored by Git.
+The production Vercel deployment is live at the URL above and is connected to the `classesin` Supabase project. The expanded seed contains 18 courses, eight lessons per course, four instructors, and 16 learners. Run `npm run seed:demo` with a Supabase service-role key before applying the SQL seed to create/reset the demo Auth accounts. If the free host sleeps, the first request may take a minute. Environment setup is documented in [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md); secrets are intentionally ignored by Git.
 
 ## Demo credentials
 
 | Role | Email | Password |
 |------|-------|----------|
-| Instructor | maya@northstar.co | Use the password configured for this Supabase Auth user |
-| Learner | elena@northstar.co | Use the password configured for this Supabase Auth user |
+| Instructor | maya@northstar.co | Demo123! |
+| Instructor | jon@northstar.co | Demo123! |
+| Instructor | priya@northstar.co | Demo123! |
+| Instructor | owen@northstar.co | Demo123! |
+| Learner | elena@northstar.co | Demo123! |
+| Learner | aarav@northstar.co | Demo123! |
+| Learner | noah@northstar.co | Demo123! |
+| Learner | sofia@northstar.co | Demo123! |
+| Learner | liam@northstar.co | Demo123! |
+| Learner | mia@northstar.co | Demo123! |
+| Learner | lucas@northstar.co | Demo123! |
+| Learner | amara@northstar.co | Demo123! |
+| Learner | theo@northstar.co | Demo123! |
+| Learner | grace@northstar.co | Demo123! |
+| Learner | mateo@northstar.co | Demo123! |
+| Learner | priyanka@northstar.co | Demo123! |
+| Learner | ethan@northstar.co | Demo123! |
+| Learner | hana@northstar.co | Demo123! |
+| Learner | caleb@northstar.co | Demo123! |
+| Learner | isla@northstar.co | Demo123! |
 
 ## Stack
 
@@ -35,12 +53,12 @@ Mark each honestly. Partial is fine — say what is partial.
 |---|------|--------|-------|
 | 1 | Accounts and roles | Complete | Supabase email/password login, role profiles, proxy guard, server role checks, and RLS. |
 | 2 | Courses | Complete | Instructor draft creation, publish validation, archive/restore lifecycle, and audit events. |
-| 3 | Lessons | Complete | Ordered lessons, add-lesson route, collision-safe reorder route, and course detail path. |
+| 3 | Lessons | Complete | Eight seeded lessons per course plus add, edit, remove, and collision-safe reorder controls. |
 | 4 | States and progress | Complete | Database trigger guards plus server validation for course/progress transitions and lesson completion. |
 | 5 | Enrollment | Complete | Learner self-enrollment, instructor enrollment, unique constraint, and duplicate handling. |
 | 6 | Finding courses | Complete | Server-side query/search/category/status filters, ordering, pagination, and learner visibility via RLS. |
 | 7 | Bulk enrollment/export | Complete | Per-email bulk results and instructor-authorized CSV progress export. |
-| 8 | Dashboard | Complete | Responsive instructor/learner workspace, metrics, chart, course list, and server-backed course data. |
+| 8 | Dashboard | Complete | Server-backed metrics, course/progress breakdown data, and eight-week completion chart. |
 | 9 | History | Complete | Append-only activity table, comments, lifecycle/progress/enrollment events, and activity view. |
 | 10 | Inactivity alerts | Complete | 14-day server query with snapshot dismissal and automatic reappearance after progress. |
 

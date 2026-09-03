@@ -2,7 +2,7 @@
 
 Tables:
 
-- `profiles(id uuid FK auth.users, full_name text, role user_role, created_at timestamptz)`.
+- `profiles(id uuid FK auth.users, full_name text, email text unique, role user_role, created_at timestamptz)`.
 - `courses(id uuid, title text, description text, category text, instructor_id uuid FK profiles, status course_status, created/updated/published/archived timestamps)`.
 - `lessons(id uuid, course_id uuid FK courses, title text, content text, position integer, timestamps)`, with unique `(course_id, position)`.
 - `enrollments(id uuid, course_id uuid FK courses, learner_id uuid FK profiles, progress progress_status, enrolled/started/completed/last_progress timestamps)`, with unique `(course_id, learner_id)`.

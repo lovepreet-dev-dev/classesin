@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The dashboard includes deterministic demo data so the interface can be reviewed without credentials. The `/login` page is ready for Supabase email/password authentication.
+Open `http://localhost:3000`. The dashboard includes deterministic demo data so the interface can be reviewed without credentials. The `/login` page lists the seeded demo accounts and shared demo password.
 
 ## Supabase setup
 
@@ -19,7 +19,8 @@ Open `http://localhost:3000`. The dashboard includes deterministic demo data so 
 2. Copy [`.env.example`](./.env.example) to [`.env.local`](./.env.local) and replace the publishable key with the project key from Supabase Settings → API Keys. See [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md) if hidden dotfiles are not visible in Finder.
 3. Run [`supabase/schema.sql`](./supabase/schema.sql) in the SQL editor.
 4. For an existing project, apply the incremental guard migration in [`supabase/migrations/20260903000000_state_transition_guards.sql`](./supabase/migrations/20260903000000_state_transition_guards.sql).
-5. Create the demo Auth users and replace the UUID placeholders in [`supabase/seed.sql`](./supabase/seed.sql), then run the seed.
+5. Set `SUPABASE_SERVICE_ROLE_KEY` in your shell and run `npm run seed:demo` to create or reset the 20 demo Auth accounts to `Demo123!` (the service-role key is never committed).
+6. Run [`supabase/seed.sql`](./supabase/seed.sql). It resolves profile IDs from the Auth emails, then adds 18 courses, eight lessons per course, enrollments, completion history, and inactivity-ready progress states.
 
 The server routes in `src/app/api` perform authenticated course queries, learner enrollment, empty-course publish validation, and CSV progress export. Postgres RLS and unique constraints provide a second authorization/data-integrity layer.
 
