@@ -9,7 +9,7 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   const people = (data ?? []).map((item) => {
     const enrollments = item.enrollments ?? [];
-    const progress = enrollments.some((row) => row.progress === "in_progress") ? "in_progress" : enrollments.some((row) => row.progress === "not_started") ? "not_started" : "completed";
+    const progress = enrollments.some((row) => row.progress === "in_progress") ? "in_progress" : enrollments.some((row) => row.progress === "not_started") ? "not_started" : enrollments.some((row) => row.progress === "completed") ? "completed" : "not_started";
     const latest = enrollments.map((row) => row.last_progress_at).filter(Boolean).sort().at(-1) ?? null;
     return { id: item.id, full_name: item.full_name, email: item.email, courses: enrollments.length, progress, last_active: latest };
   });

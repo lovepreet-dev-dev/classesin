@@ -14,14 +14,15 @@ export async function POST(request: NextRequest) {
   const emails = [...new Set(rawEmails.filter((email): email is string => typeof email === "string").map((email) => email.trim().toLowerCase()).filter(Boolean))];
   if (!courseId || !emails.length) return NextResponse.json({ error: "courseId and at least one email are required" }, { status: 400 });
 
-  const { data: course } = await supabase.from("courses").select("status,instructor_id").eq("id", courseId).single();
+  const { data: course } = await supabase.from("courses").select("status").eq("id", courseId).single();
   if (!course || course.status !== "published") return NextResponse.json({ error: "Only published courses can be bulk-enrolled" }, { status: 409 });
-  if (course.instructor_id !== user.id) return NextResponse.json({ error: "You can only bulk-enroll learners in your own courses" }, { status: 403 });
 
   const { data: learnerRows } = await supabase.from("profiles").select("id,email").eq("role", "learner").in("email", emails);
   const learners = (learnerRows ?? []) as { id: string; email: string }[];
   const byEmail = new Map(learners.map((learner) => [learner.email.toLowerCase(), learner]));
-  const { data: existingRows } = await supabase.from("enrollments").select("learner_id").eq("course_id", courseId).in("learner_id", learners.map((learner) => learner.id));
+  const { data: existingRows } = learners.length
+    ? await supabase.from("enrollments").select("learner_id").eq("course_id", courseId).in("learner_id", learners.map((learner) => learner.id))
+    : { data: [] };
   const existingIds = new Set(((existingRows ?? []) as { learner_id: string }[]).map((row) => row.learner_id));
   const results: { email: string; status: BulkStatus }[] = [];
 
