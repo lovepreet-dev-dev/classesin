@@ -34,3 +34,39 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
 - **Chose:** Store both lesson completion rows and current enrollment progress.
 - **Rejected:** Calculating every dashboard metric from lesson rows on every request.
 - **Why:** Detail remains auditable while common lists and alerts stay fast. Later reversed: the first prototype kept only a percentage on enrollment; adding lesson rows was necessary to prove completion and support ordered lessons.
+
+## Decision 6
+
+- **Chose:** A request/approve workflow replacing instant learner self-enrollment, built on an
+  `enrollment_requests` table with pending/approved/rejected states.
+- **Rejected:** Keeping goal 5's direct self-enrollment unchanged.
+- **Why:** While testing, self-enrollment felt too instant for a training catalogue where an
+  instructor might want a gate.
+- **Later reversed:** Re-reading the brief showed goal 5 specifies that learners "can enrol
+  themselves" directly — the approval queue was scope creep that added a second pending state to
+  explain, seed, and demo for no goal. It was reverted completely rather than kept behind a flag:
+  the feature commit, its revert, and the migration removal are all in git history (`f4c0c54`,
+  `f8afe0f`, `4999ba3`), and the schema carries no `enrollment_requests` leftovers.
+
+## Decision 7
+
+- **Chose:** Role-wide instructor permissions — any instructor can edit, publish, archive,
+  bulk-enroll into, and export any course, and the catalogue shows instructors all courses.
+- **Rejected:** Ownership scoping (only a course's author may edit it; an instructor's feed shows
+  only courses they own).
+- **Why:** The brief describes a small internal training team ("built by a couple of instructors")
+  and none of the ten goals mentions ownership. The activity log already answers "who did this",
+  and scoping would ripple through bulk enrollment, CSV export, the dashboard's company-wide
+  headline numbers, and the shared demo dataset for no assessed gain. If a multi-tenant need ever
+  appeared, the change is contained: add `instructor_id = auth.uid()` to the
+  `instructors manage courses/lessons` RLS `with check` clauses and scope the routes the same way.
+
+## Decision 8
+
+- **Chose:** A deterministic demo fixture (`src/lib/demo-data.ts`) that renders a working course
+  page when the Supabase environment is missing or unreachable.
+- **Rejected:** Hard failure screens whenever the backend is unavailable.
+- **Why:** The submission is graded from a live URL on free tiers that can sleep or pause; the
+  fixture keeps the app reviewable during an outage. It stays confined to a fallback — every
+  authenticated path uses the real routes and RLS — and the trade-off is acknowledged in
+  `SUBMISSION.md` as the least-happy item.

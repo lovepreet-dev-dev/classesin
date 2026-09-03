@@ -61,3 +61,24 @@ The review identified that the initial dashboard dialogs were local-only, export
 ### What you corrected
 
 The dialogs now submit to server routes, CSV export resolves authenticated instructor context, and `schema.sql` includes course/progress transition triggers. The deterministic fixture remains only as an unavailable-Supabase fallback.
+
+## Post-build spec-compliance audit
+
+### Prompt
+
+“Audit the finished app against the assignment brief: for each of the ten goals report
+implemented / partial / missing with server-side evidence, flag anything present beyond the
+goals, and list exactly what is left.”
+
+### What you got
+
+A goal-by-goal verdict with file-level evidence (RLS policies, transition triggers, route-handler
+checks), confirmation that no stretch ideas were built, a flag list of extras (demo fallback,
+learners directory), and scale caveats (handler-side catalogue sorting/pagination, dashboard
+aggregation over all enrollment rows, policy-based activity-log immutability).
+
+### What you corrected
+
+The audit found a stale handoff note still describing the reverted enrollment-request migration as
+pending work. Documentation was cleaned up instead of rebuilding the feature, and the reversal was
+recorded as a decision rather than left as unexplained revert commits in the history.
