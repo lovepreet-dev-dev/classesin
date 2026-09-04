@@ -7,33 +7,57 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
 
 ## Decision 1
 
-- **Chose:** A Next.js monolith with Supabase.
-- **Rejected:** A separate SPA/API deployment.
-- **Why:** It keeps auth, server validation, UI, and deployment inside a small surface area for a 12-hour exercise.
+- **Chose:** A single Next.js monolith with Supabase behind it.
+- **Rejected:** A separate SPA frontend with a standalone API service.
+- **Why:** With one language, one repo, and one deploy, auth handling, server validation, and the
+  UI sit next to each other, and every feature costs one change instead of three. A split
+  frontend/backend would have bought an architectural purity nobody grades while spending hours
+  that the enforcement layer needed. If the product grew a second client, the API routes already
+  speak JSON and could be lifted out without rewriting the rules.
 
 ## Decision 2
 
-- **Chose:** Postgres enums and constraints for lifecycle values and uniqueness.
-- **Rejected:** Free-form strings checked only in React.
-- **Why:** Illegal data should be rejected even when a caller bypasses the UI.
+- **Chose:** Postgres enums, unique constraints, and triggers for lifecycle values and state
+  machines.
+- **Rejected:** Free-form strings whose validity is checked only in React forms.
+- **Why:** A React check protects the form, not the data — any direct API call, script, or future
+  client skips it entirely. With the rules in the database, `draft → archived` is not "handled
+  incorrectly", it is impossible. The cost is small (two trigger functions and some enums) and it
+  removes a whole class of "how did the data get like this?" bugs.
 
 ## Decision 3
 
-- **Chose:** Append-only activity log rows.
-- **Rejected:** An editable “last updated” field or mutable comments table.
-- **Why:** The assignment explicitly requires history that cannot be rewritten.
+- **Chose:** An append-only `course_activity_log` where comments are just rows with
+  `event = 'commented'`.
+- **Rejected:** A mutable comments table plus a "last updated" field on the course.
+- **Why:** The brief requires history that cannot be rewritten — including by instructors. One
+  append-only table answers "what happened", "who did it", and "what did people say" with the
+  same mechanism, and its immutability is structural: the table simply has no UPDATE or DELETE
+  policy for any role. A separate comments table would have needed its own protection and a
+  second place to check.
 
 ## Decision 4
 
-- **Chose:** Derive inactivity from `last_progress_at` plus a dismissal snapshot.
-- **Rejected:** A scheduled email/worker system.
-- **Why:** The alert is a queryable product state and does not need another runtime at this scale.
+- **Chose:** Derive inactivity from `last_progress_at` compared to a 14-day cutoff, with
+  dismissals storing a snapshot of that timestamp.
+- **Rejected:** A scheduled worker (cron job) that scans learners and writes alert records.
+- **Why:** The alert is a deterministic function of data already in the database, so a query is
+  always correct and can never drift from reality. A worker would add a runtime, a failure mode,
+  and eventual-consistency questions for zero added correctness. The snapshot makes the one hard
+  part — alerts re-appearing after renewed inactivity — fall out naturally: the dismissal only
+  suppresses an alert while the learner's `last_progress_at` still matches the snapshot.
 
 ## Decision 5
 
-- **Chose:** Store both lesson completion rows and current enrollment progress.
-- **Rejected:** Calculating every dashboard metric from lesson rows on every request.
-- **Why:** Detail remains auditable while common lists and alerts stay fast. Later reversed: the first prototype kept only a percentage on enrollment; adding lesson rows was necessary to prove completion and support ordered lessons.
+- **Chose:** Store both lesson completion rows (`lesson_completions`) and the current progress
+  state on the enrollment row.
+- **Rejected:** Calculating progress from lesson rows on every request (or keeping only a
+  percentage on the enrollment).
+- **Why:** Progress is read constantly — every list, the dashboard, the alerts scan — while
+  completion detail is read rarely. Denormalizing the current state keeps the hot path cheap,
+  and the lesson rows keep it auditable and prove per-lesson completion. **Later reversed:** the
+  first prototype kept only a percentage on the enrollment; adding the lesson rows turned out to
+  be necessary to prove completion, support ordered lessons, and power the roster's "x of y".
 
 ## Decision 6
 
@@ -44,9 +68,11 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
   instructor might want a gate.
 - **Later reversed:** Re-reading the brief showed goal 5 specifies that learners "can enrol
   themselves" directly — the approval queue was scope creep that added a second pending state to
-  explain, seed, and demo for no goal. It was reverted completely rather than kept behind a flag:
-  the feature commit, its revert, and the migration removal are all in git history (`f4c0c54`,
-  `f8afe0f`, `4999ba3`), and the schema carries no `enrollment_requests` leftovers.
+  explain, seed, and demo, in exchange for nothing any goal asked for. It was reverted completely
+  rather than kept behind a flag: the feature commit, its revert, and the migration removal are
+  all in git history (`f4c0c54`, `f8afe0f`, `4999ba3`), and the schema carries no
+  `enrollment_requests` leftovers. Dead code behind a flag is still dead code someone has to
+  understand.
 
 ## Decision 7
 
@@ -57,8 +83,8 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
 - **Why:** The brief describes a small internal training team ("built by a couple of instructors")
   and none of the ten goals mentions ownership. The activity log already answers "who did this",
   and scoping would ripple through bulk enrollment, CSV export, the dashboard's company-wide
-  headline numbers, and the shared demo dataset for no assessed gain. If a multi-tenant need ever
-  appeared, the change is contained: add `instructor_id = auth.uid()` to the
+  headline numbers, and the shared demo dataset for no assessed gain. The rejection is also
+  cheap to reverse if a multi-tenant need ever appears: add `instructor_id = auth.uid()` to the
   `instructors manage courses/lessons` RLS `with check` clauses and scope the routes the same way.
 
 ## Decision 8
@@ -73,7 +99,8 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
   cover reviewability without it.
 - **Later reversed:** the fixture shipped in the first build and was removed after the goal audit;
   removing it collapsed roughly ten demo branches in the course page into single server-backed
-  paths and shrank the client bundle.
+  paths and shrank the client bundle. (The login page's demo-account quick-fill later returned as
+  pure form-filling convenience — it touches no data path.)
 
 ## Decision 9
 
@@ -85,4 +112,5 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
 - **Why:** The total is legitimate, non-sensitive catalogue data; showing a distorted value or
   hiding it both misrepresent the system. The service read fetches one column (`course_id`) for
   exactly the courses on the page, mirroring the audited roster-read pattern, and the service key
-  never reaches the browser.
+  never reaches the browser. This decision came out of a production end-to-end pass, which is
+  also why it is documented rather than silently patched.
