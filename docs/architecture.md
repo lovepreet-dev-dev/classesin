@@ -88,7 +88,10 @@ it is instantaneous. But it is the first thing I would move into SQL (`order()`/
 
 ## Deployment and configuration
 
-Vercel deploys `main` on every push; `vercel.json` pins the install and build commands. Three
+Vercel deploys `main` on every push; `vercel.json` pins the install and build commands and pins
+the function region to `bom1` (Mumbai) so the serverless functions sit next to the Supabase
+project and its users — with the default US region, every request paid a transoceanic round trip
+and the workspace took multiple seconds to mount. Three
 environment variables are required in production: `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The last one backs the audited
 service-role reads and writes described above — and when it is missing, those paths fail silently
