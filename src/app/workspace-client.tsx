@@ -165,7 +165,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
         return {
           id: item.id, enrollmentId: item.id, name, initials: initialsFor(name),
           course: course?.title ?? "Course",
-          days: item.last_progress_at ? Math.max(15, Math.floor((Date.now() - new Date(item.last_progress_at).getTime()) / 86400000)) : 15,
+          days: item.last_progress_at ? Math.max(1, Math.floor((Date.now() - new Date(item.last_progress_at).getTime()) / 86400000)) : 15,
           tone: tones[index % tones.length],
         };
       }));
