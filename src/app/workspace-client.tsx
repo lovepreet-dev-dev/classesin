@@ -4,10 +4,12 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, ArrowUpRight, Bell, BookOpen, CheckCircle2, ChevronDown, Clock3, FileText, Filter, GraduationCap, LayoutDashboard, Library, Loader2, LogOut, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles, Upload, UserPlus, Users, X } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 
 export type WorkspaceProfile = { id: string; fullName: string; email: string; role: "Instructor" | "Learner" };
+
+const CompletionChart = dynamic(() => import("./completion-chart"));
 
 type Status = "Published" | "Draft" | "Archived";
 type Progress = "Not started" | "In progress" | "Completed";
@@ -277,16 +279,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
             <section className="panel chart-panel">
               <div className="panel-header"><div><p className="eyebrow">Momentum</p><h2>Completions over time</h2></div><span className="chart-total">{dashboard.completionTotal} <small>last 8 weeks</small></span></div>
               <div className="chart-legend"><span><i className="legend-dot coral-dot" />Completions</span></div>
-              <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboard.weekly} margin={{ top: 10, right: 8, left: -28, bottom: 0 }}>
-                  <defs><linearGradient id="coralGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f47f6b" stopOpacity={0.32} /><stop offset="100%" stopColor="#f47f6b" stopOpacity={0.02} /></linearGradient></defs>
-                  <CartesianGrid vertical={false} stroke="#eeeae4" />
-                  <XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fill: "#918b83", fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "#918b83", fontSize: 11 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #ebe6df", boxShadow: "0 8px 24px rgba(47,43,38,.1)" }} />
-                  <Area type="monotone" dataKey="completions" stroke="#e96e5a" strokeWidth={2.5} fill="url(#coralGradient)" />
-                </AreaChart>
-              </ResponsiveContainer></div>
+              <div className="chart-wrap"><CompletionChart weekly={dashboard.weekly} /></div>
             </section>
             <section className="panel alerts-panel">
               <div className="panel-header"><div><p className="eyebrow">Needs a nudge</p><h2>Inactivity alerts <span className="count-pill">{alerts.length}</span></h2></div><button className="text-button" onClick={() => setActive("Activity")}>View all <ArrowUpRight size={14} /></button></div>
