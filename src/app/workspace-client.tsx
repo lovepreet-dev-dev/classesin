@@ -14,7 +14,7 @@ const CompletionChart = dynamic(() => import("./completion-chart"));
 type Status = "Published" | "Draft" | "Archived";
 type Progress = "Not started" | "In progress" | "Completed";
 type Tone = "coral" | "lavender" | "mint" | "yellow" | "blue" | "slate";
-type Course = { id: string; title: string; description: string; category: string; instructor: string | null; status: Status; lessons: number; learners: number; progress?: Progress; updated: string; accent: Tone };
+type Course = { id: string; title: string; description: string; category: string; instructor: string | null; status: Status; lessons: number; learners: number; progress?: Progress; updated: string; accent: Tone; completedLessons?: number };
 type PersonRow = { id: string; name: string; email: string; courses: number; progress: Progress; lastActive: string; tone: Tone };
 type Alert = { id: string; enrollmentId: string; name: string; initials: string; course: string; days: number; tone: Tone };
 type BulkResult = { email: string; status: "unknown" | "already_enrolled" | "newly_enrolled" | "error" };
@@ -23,7 +23,7 @@ type InstructorOption = { id: string; fullName: string };
 type DashboardData = {
   totalLearners: number; publishedCourses: number; completionsThisMonth: number; inProgress: number; completionTotal: number;
   weekly: { week: string; completions: number }[];
-  courseBreakdown: { course: string; enrolled: number; completed: number; inProgress: number; notStarted: number }[];
+  courseBreakdown: { id: string; course: string; enrolled: number; completed: number; inProgress: number; notStarted: number }[];
   progressBreakdown: { progress: string; count: number }[];
 };
 
@@ -135,7 +135,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
       if (payload.dashboard) setDashboard(payload.dashboard);
       if (payload.instructors) setInstructors((payload.instructors as { id: string; full_name: string }[]).map((item) => ({ id: item.id, fullName: item.full_name })));
       if (payload.enrollments) {
-        const enrollments = (payload.enrollments ?? []) as { progress: string; enrollments?: { count?: number }[]; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
+        const enrollments = (payload.enrollments ?? []) as { progress: string; enrolled_at?: string; enrollments?: { count?: number }[]; lesson_completions?: { count?: number }[]; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
         const rows: Course[] = [];
         const progressByCourse: Record<string, Progress> = {};
         for (const item of enrollments) {
@@ -148,8 +148,9 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
             status: titleCase(course.status) as Status,
             lessons: course.lessons?.length ?? 0,
             learners: Array.isArray(item.enrollments) ? item.enrollments.reduce((total, row) => total + Number(row.count ?? 0), 0) : 0,
+            completedLessons: Array.isArray(item.lesson_completions) ? item.lesson_completions.reduce((total, row) => total + Number(row.count ?? 0), 0) : 0,
             progress: titleCase(item.progress) as Progress,
-            updated: "Enrolled course",
+            updated: item.enrolled_at ? "Enrolled " + new Date(item.enrolled_at).toLocaleDateString() : "Enrolled",
             accent: accentByCategory[course.category] ?? "slate",
           });
           progressByCourse[course.id] = titleCase(item.progress) as Progress;
@@ -211,7 +212,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   }
 
   const totalMatches = serverCount;
-  const table = <CourseTable courses={filtered} role={role} loading={loadingCourses} />;
+  const table = <CourseTable courses={filtered} role={role} loading={loadingCourses} breakdown={isInstructor ? dashboard.courseBreakdown : undefined} />;
   const dashboardBreakdown = <DashboardBreakdown dashboard={dashboard} />;
   const navItems = isInstructor
     ? [{ label: "Overview", icon: LayoutDashboard }, { label: "Courses", icon: Library }, { label: "Learners", icon: Users }, { label: "Activity", icon: Activity }]
@@ -283,11 +284,11 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
             <MetricCard label="Total learners" value={String(dashboard.totalLearners)} delta="" detail="registered learners" icon={<Users size={18} />} tone="lavender" />
             <MetricCard label="Published courses" value={String(dashboard.publishedCourses)} delta="" detail="live in the catalog" icon={<BookOpen size={18} />} tone="mint" />
             <MetricCard label="Completions this month" value={String(dashboard.completionsThisMonth)} delta="" detail="courses finished" icon={<CheckCircle2 size={18} />} tone="yellow" />
-            <MetricCard label="In progress" value={String(dashboard.inProgress)} delta="" detail="learners currently active" icon={<Clock3 size={18} />} tone="coral" />
+            <MetricCard label="In progress" value={String(dashboard.inProgress)} delta="" detail="learners mid-course" icon={<Clock3 size={18} />} tone="coral" />
           </div>
           <div className="dashboard-grid">
             <section className="panel chart-panel">
-              <div className="panel-header"><div><p className="eyebrow">Momentum</p><h2>Completions over time</h2></div><span className="chart-total">{dashboard.completionTotal} <small>last 8 weeks</small></span></div>
+              <div className="panel-header"><div><p className="eyebrow">Momentum</p><h2>Completions over time</h2></div><span className="chart-total">{dashboard.completionTotal} <small>completions · 8 weeks</small></span></div>
               <div className="chart-legend"><span><i className="legend-dot coral-dot" />Completions</span></div>
               <div className="chart-wrap"><CompletionChart weekly={dashboard.weekly} /></div>
             </section>
@@ -301,7 +302,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
           {dashboardBreakdown}
           <section className="panel course-panel">
             <div className="panel-header course-panel-header">
-              <div><p className="eyebrow">Your library</p><h2>Courses <span className="count-pill soft">{totalMatches}</span></h2></div>
+              <div><p className="eyebrow">Catalogue</p><h2>Courses <span className="count-pill soft">{totalMatches}</span></h2></div>
               <button className="text-button" onClick={() => setActive("Courses")}>Manage courses <ArrowUpRight size={14} /></button>
             </div>
             <CourseToolbar query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} instructors={instructors} />
@@ -322,10 +323,10 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
               <div><p className="eyebrow">Your learning</p><h2>My courses <span className="count-pill soft">{enrolledCourses.length}</span></h2></div>
               <button className="text-button" onClick={() => setActive("Courses")}>Find more courses <ArrowUpRight size={14} /></button>
             </div>
-            <CourseTable courses={enrolledCourses} role="Learner" loading={false} />
+            <CourseTable courses={enrolledCourses} role="Learner" loading={false} updatedLabel="Enrolled" />
           </section>
         </>)}
-        {active !== "Overview" && <SecondaryView active={active} filtered={filtered} totalMatches={totalMatches} page={page} pageSize={pageSize} setPage={setPage} role={role} query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} people={people} activity={activity} alerts={alerts} onCreate={() => setShowCreate(true)} onBulk={() => setShowBulk(true)} instructors={instructors} coursesLoaded={coursesLoaded} />}
+        {active !== "Overview" && <SecondaryView active={active} filtered={filtered} totalMatches={totalMatches} page={page} pageSize={pageSize} setPage={setPage} role={role} query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} people={people} activity={activity} alerts={alerts} onCreate={() => setShowCreate(true)} onBulk={() => setShowBulk(true)} instructors={instructors} coursesLoaded={coursesLoaded} breakdown={isInstructor ? dashboard.courseBreakdown : undefined} />}
       </div>
     </section>
     {showSettings && <SettingsModal profile={profile} onClose={() => setShowSettings(false)} />}
@@ -362,28 +363,34 @@ function CourseToolbar({ query, setQuery, category, setCategory, status, setStat
   </div>;
 }
 
-function CourseTable({ courses, role, loading }: { courses: Course[]; role: "Instructor" | "Learner"; loading: boolean }) {
+function CourseTable({ courses, role, loading, breakdown, updatedLabel }: { courses: Course[]; role: "Instructor" | "Learner"; loading: boolean; breakdown?: { id: string; enrolled: number; completed: number }[]; updatedLabel?: string }) {
   return <div className="course-table">
-    <div className="table-head"><span>Course</span><span>Status</span><span>Learners</span><span>Progress</span><span>Last updated</span><span /></div>
-    {loading ? <CourseTableSkeleton /> : courses.length ? courses.map((course) => <CourseRow key={course.id} course={course} role={role} />) : <EmptyCourseState />}
+    <div className="table-head"><span>Course</span><span>Status</span><span>Learners</span><span>Progress</span><span>{updatedLabel ?? "Last updated"}</span><span /></div>
+    {loading ? <CourseTableSkeleton /> : courses.length ? courses.map((course) => <CourseRow key={course.id} course={course} role={role} breakdown={breakdown} />) : <EmptyCourseState />}
   </div>;
 }
 
-function CourseRow({ course, role }: { course: Course; role: "Instructor" | "Learner" }) {
+function CourseRow({ course, role, breakdown }: { course: Course; role: "Instructor" | "Learner"; breakdown?: { id: string; enrolled: number; completed: number }[] }) {
   const router = useRouter();
-  const values: Record<string, number> = { "Not started": 0, "In progress": 58, Completed: 100, "Not enrolled": 0 };
   const open = () => router.push(`/courses/${course.id}`);
+  const stats = breakdown?.find((item) => item.id === course.id);
+  const done = course.completedLessons ?? 0;
+  const percent = course.lessons ? Math.round((done / course.lessons) * 100) : 0;
   return <div className="course-row" role="link" tabIndex={0} onClick={open} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } }}>
     <div className="course-title-cell">
       <div className={`course-thumb thumb-${course.accent}`}><FileText size={19} /></div>
-      <div><Link href={`/courses/${course.id}`} className="course-link" onClick={(event) => event.stopPropagation()}>{course.title}</Link><span>{course.category} <i /> {course.lessons} lessons</span></div>
+      <div><Link href={`/courses/${course.id}`} className="course-link" onClick={(event) => event.stopPropagation()}>{course.title}</Link><span>{course.category} <i /> {course.lessons} lessons <i /> By {course.instructor ?? "Kinship"}</span></div>
     </div>
     <div><Badge tone={course.status}>{course.status}</Badge></div>
     <div className="learner-count"><Users size={14} /> {course.learners}</div>
     <div className="progress-cell">
       {role === "Learner"
-        ? <><ProgressBar value={values[course.progress ?? "Not enrolled"] ?? 0} tone={course.progress === "Completed" ? "mint" : "coral"} /><small>{course.progress ?? "Not enrolled"}</small></>
-        : <small>—</small>}
+        ? course.completedLessons !== undefined
+          ? <><ProgressBar value={percent} tone={course.progress === "Completed" ? "mint" : "coral"} /><small>{done} of {course.lessons} lessons</small></>
+          : <small>{course.progress ?? "Not enrolled"}</small>
+        : stats && stats.enrolled > 0
+          ? <><ProgressBar value={Math.round((stats.completed / stats.enrolled) * 100)} tone="mint" /><small>{stats.completed} of {stats.enrolled} completed</small></>
+          : <small>—</small>}
     </div>
     <div className="updated-cell">{course.updated}</div>
     <span className="row-menu" aria-hidden><MoreHorizontal size={17} /></span>
@@ -398,12 +405,12 @@ function EmptyCourseState() {
   return <div className="empty-course"><Search size={22} /><strong>No courses match those filters</strong><span>Try a different search or reset the filters.</span></div>;
 }
 
-function SecondaryView({ active, filtered, totalMatches, page, pageSize, setPage, role, query, setQuery, category, setCategory, status, setStatus, instructorFilter, setInstructorFilter, sort, setSort, showFilters, setShowFilters, clearFilters, people, activity, alerts, onCreate, onBulk, instructors, coursesLoaded }: {
+function SecondaryView({ active, filtered, totalMatches, page, pageSize, setPage, role, query, setQuery, category, setCategory, status, setStatus, instructorFilter, setInstructorFilter, sort, setSort, showFilters, setShowFilters, clearFilters, people, activity, alerts, onCreate, onBulk, instructors, coursesLoaded, breakdown }: {
   active: string; filtered: Course[]; totalMatches: number; page: number; pageSize: number; setPage: (value: number) => void; role: "Instructor" | "Learner";
   query: string; setQuery: (value: string) => void; category: string; setCategory: (value: string) => void; status: string; setStatus: (value: string) => void;
   instructorFilter: string; setInstructorFilter: (value: string) => void; sort: string; setSort: (value: string) => void;
   showFilters: boolean; setShowFilters: (value: boolean) => void; clearFilters: () => void;
-  people: PersonRow[]; activity: ActivityItem[]; alerts: Alert[]; onCreate: () => void; onBulk: () => void; instructors: InstructorOption[]; coursesLoaded: boolean;
+  people: PersonRow[]; activity: ActivityItem[]; alerts: Alert[]; onCreate: () => void; onBulk: () => void; instructors: InstructorOption[]; coursesLoaded: boolean; breakdown?: { id: string; enrolled: number; completed: number }[];
 }) {
   const isInstructor = role === "Instructor";
   const totalPages = Math.max(1, Math.ceil(totalMatches / pageSize));
@@ -420,7 +427,7 @@ function SecondaryView({ active, filtered, totalMatches, page, pageSize, setPage
     </div>
     {active === "Courses" ? <section className="panel course-panel">
       <CourseToolbar query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} instructors={instructors} />
-      <CourseTable courses={visibleCourses} role={role} loading={!coursesLoaded} />
+      <CourseTable courses={visibleCourses} role={role} loading={!coursesLoaded} breakdown={breakdown} />
       <div className="pagination">
         <span>Showing {totalMatches ? ((page - 1) * pageSize) + 1 : 0}–{Math.min(page * pageSize, totalMatches)} of {totalMatches} courses</span>
         <div>

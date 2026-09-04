@@ -25,15 +25,29 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   const rows = [...(data ?? [])];
-  // RLS limits a learner's enrollments(count) embed to their own enrollment,
-  // so the catalogue's learner counts come from the service role after the
-  // role-checked, published-only query above.
+  // RLS limits a learner's enrollments(count) embed to their own enrollment and
+  // hides the instructor's profile row, so the catalogue's learner counts and
+  // instructor names come from the service role after the role-checked,
+  // published-only query above.
   if (!hasRole(profile, "instructor") && rows.length) {
     const service = createServiceClient();
-    const { data: enrolled } = await service.from("enrollments").select("course_id").in("course_id", rows.map((row) => row.id));
+    const ids = rows.map((row) => row.id);
+    const [counts, meta] = await Promise.all([
+      service.from("enrollments").select("course_id").in("course_id", ids),
+      service.from("courses").select("id,profiles!courses_instructor_id_fkey(full_name)").in("id", ids),
+    ]);
     const tally = new Map<string, number>();
-    for (const row of enrolled ?? []) tally.set(row.course_id, (tally.get(row.course_id) ?? 0) + 1);
-    for (const row of rows) row.enrollments = [{ count: tally.get(row.id) ?? 0 }];
+    for (const row of counts.data ?? []) tally.set(row.course_id, (tally.get(row.course_id) ?? 0) + 1);
+    const instructorsByName = new Map<string, string>();
+    for (const row of meta.data ?? []) {
+      const instructor = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      if (instructor?.full_name) instructorsByName.set(row.id, instructor.full_name);
+    }
+    for (const row of rows) {
+      row.enrollments = [{ count: tally.get(row.id) ?? 0 }];
+      const name = instructorsByName.get(row.id);
+      if (name) row.profiles = { full_name: name };
+    }
   }
   rows.sort((a, b) => {
     if (sort === "title") return a.title.localeCompare(b.title);

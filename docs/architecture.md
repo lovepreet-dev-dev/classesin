@@ -40,10 +40,11 @@ talks to it through two clients:
   because a real requirement ran into a real RLS limitation: the learner enrollment list (RLS
   hides archived courses, but a learner still enrolled in one must keep seeing it in "My
   courses"), instructor roster reads on the course page (RLS lets learners read only their own
-  lesson completions, but the roster needs every student's counts), catalogue learner counts for
-  non-instructors (RLS limits a learner's count embed to their own row, which rendered as 0 or
-  1), and enrollment inserts made on a learner's behalf. Every call site verifies the caller's
-  role server-side first. The service key never reaches the browser.
+  lesson completions, but the roster needs every student's counts), catalogue learner counts and
+  instructor names for non-instructors (RLS limits a learner's count embed to their own row —
+  which rendered as 0 or 1 — and hides the instructor's profile row, which rendered as "By
+  Kinship"), and enrollment inserts made on a learner's behalf. Every call site verifies the
+  caller's role server-side first. The service key never reaches the browser.
 
 **Seeding.** `npm run seed:demo` resets a deterministic demo dataset through the service-role
 scripts: 20 accounts, 18 courses × 8 lessons, enrollments with completions and deliberately

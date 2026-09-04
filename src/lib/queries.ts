@@ -35,8 +35,8 @@ export async function getDashboard(supabase: SupabaseClient): Promise<QueryResul
     return { week: start.toLocaleDateString(undefined, { month: "short", day: "numeric" }), completions: (completionRows.data ?? []).filter((row) => row.completed_at && new Date(row.completed_at) >= start && new Date(row.completed_at) < end).length };
   });
   const progressBreakdown = ["completed", "in_progress", "not_started"].map((progress) => ({ progress, count: (enrollmentRows.data ?? []).filter((row) => row.progress === progress).length }));
-  const byCourse = new Map<string, { course: string; enrolled: number; completed: number; inProgress: number; notStarted: number }>();
-  for (const course of courseRows.data ?? []) byCourse.set(course.id, { course: course.title, enrolled: 0, completed: 0, inProgress: 0, notStarted: 0 });
+  const byCourse = new Map<string, { id: string; course: string; enrolled: number; completed: number; inProgress: number; notStarted: number }>();
+  for (const course of courseRows.data ?? []) byCourse.set(course.id, { id: course.id, course: course.title, enrolled: 0, completed: 0, inProgress: 0, notStarted: 0 });
   for (const row of enrollmentRows.data ?? []) {
     const item = byCourse.get(row.course_id);
     if (!item) continue;
@@ -98,7 +98,7 @@ export async function getLearnerEnrollments(supabase: SupabaseClient, learnerId:
   // The service role keeps an archived course visible in the enrollment list of
   // learners who are enrolled in it, while the query only ever returns rows for
   // the requesting learner.
-  const { data, error } = await supabase.from("enrollments").select("id,progress,enrolled_at,started_at,completed_at,last_progress_at,courses(id,title,description,category,status,profiles!courses_instructor_id_fkey(full_name),lessons(id,title,content,position),enrollments(count))").eq("learner_id", learnerId).order("enrolled_at", { ascending: false });
+  const { data, error } = await supabase.from("enrollments").select("id,progress,enrolled_at,started_at,completed_at,last_progress_at,lesson_completions(count),courses(id,title,description,category,status,profiles!courses_instructor_id_fkey(full_name),lessons(id,title,content,position),enrollments(count))").eq("learner_id", learnerId).order("enrolled_at", { ascending: false });
   if (error) return { data: [], error: error.message };
   const rows = (data ?? []).map((row) => {
     const course = Array.isArray(row.courses) ? row.courses[0] : row.courses;
