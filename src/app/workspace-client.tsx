@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { cloneElement, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, ArrowUpRight, Bell, BookOpen, CheckCircle2, ChevronDown, Clock3, FileText, Filter, GraduationCap, LayoutDashboard, Library, Loader2, LogOut, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles, Upload, UserPlus, Users, X } from "lucide-react";
@@ -97,6 +97,9 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
   const [instructors, setInstructors] = useState<InstructorOption[]>([]);
   const [toast, setToast] = useState("");
+  const [menu, setMenu] = useState<"workspace" | "profile" | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
   const pageSize = 8;
   const firstName = profile.fullName.split(" ")[0];
 
@@ -224,9 +227,12 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   return <main className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark"><GraduationCap size={21} /></span><span>kinship<span className="brand-dot">.</span></span></div>
-      <button className="workspace-switcher" onClick={() => notify("Workspace switching is available for team accounts.")}>
-        <div className="workspace-avatar">N</div><div><strong>Northstar Inc.</strong><small>Learning workspace</small></div><ChevronDown size={15} />
-      </button>
+      <Dropdown open={menu === "workspace"} onToggle={() => setMenu(menu === "workspace" ? null : "workspace")} onClose={() => setMenu(null)} button={<button className="workspace-switcher" aria-expanded={menu === "workspace"}><div className="workspace-avatar">N</div><div><strong>Northstar Inc.</strong><small>Learning workspace</small></div><ChevronDown size={15} /></button>}>
+        <div className="popover-section"><strong>Northstar Inc.</strong><small>Learning workspace · Free plan</small></div>
+        <div className="popover-divider" />
+        <div className="popover-user"><Avatar initials={initialsFor(profile.fullName)} tone={isInstructor ? "coral" : "lavender"} /><div><strong>{profile.fullName}</strong><small>{profile.email}</small></div></div>
+        <div className="popover-meta">{isInstructor ? <><span className="badge badge-published">{dashboard.totalLearners} learners</span><span>{dashboard.publishedCourses} published courses</span></> : <span>{enrolledCourses.length} enrolled {enrolledCourses.length === 1 ? "course" : "courses"}</span>}</div>
+      </Dropdown>
       <p className="eyebrow nav-label">Workspace</p>
       <nav className="primary-nav">
         {navItems.map((item) => {
@@ -238,11 +244,11 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
         <p className="eyebrow nav-label second">Manage</p>
         <nav className="primary-nav">
           <button className="nav-item" onClick={() => setShowCreate(true)}><Plus size={18} />New course</button>
-          <button className="nav-item" onClick={() => notify("Workspace settings are managed by your administrator.")}><Settings size={18} />Settings</button>
+          <button className="nav-item" onClick={() => setShowSettings(true)}><Settings size={18} />Settings</button>
         </nav>
       </>}
       <div className="sidebar-spacer" />
-      <button className="sidebar-help" onClick={() => notify("You’re up to date with the latest Kinship updates.")}>
+      <button className="sidebar-help" onClick={() => setShowWhatsNew(true)}>
         <Sparkles size={17} /><div><strong>Make learning stick</strong><span>See what’s new in Kinship</span></div><ArrowUpRight size={15} />
       </button>
       <div className="profile-row">
@@ -256,7 +262,11 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
         <div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{active}</strong></div>
         <div className="topbar-actions">
           {isInstructor && <button className="icon-button" aria-label="Notifications" onClick={() => setActive("Activity")}><Bell size={19} />{alerts.length > 0 && <span className="notification-dot" />}</button>}
-          <button className="icon-button" aria-label="Sign out" onClick={signOut}><Avatar initials={initialsFor(profile.fullName)} tone={isInstructor ? "coral" : "lavender"} /></button>
+          <Dropdown open={menu === "profile"} onToggle={() => setMenu(menu === "profile" ? null : "profile")} onClose={() => setMenu(null)} align="right" button={<button className="icon-button" aria-label="Profile menu" aria-expanded={menu === "profile"}><Avatar initials={initialsFor(profile.fullName)} tone={isInstructor ? "coral" : "lavender"} /></button>}>
+            <div className="popover-user"><Avatar initials={initialsFor(profile.fullName)} tone={isInstructor ? "coral" : "lavender"} /><div><strong>{profile.fullName}</strong><small>{profile.email}</small></div></div>
+            <div className="popover-divider" />
+            <button className="popover-item" onClick={signOut}><LogOut size={15} /> Sign out</button>
+          </Dropdown>
         </div>
       </header>
       <div className="content-wrap">
@@ -318,6 +328,8 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
         {active !== "Overview" && <SecondaryView active={active} filtered={filtered} totalMatches={totalMatches} page={page} pageSize={pageSize} setPage={setPage} role={role} query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} people={people} activity={activity} alerts={alerts} onCreate={() => setShowCreate(true)} onBulk={() => setShowBulk(true)} instructors={instructors} coursesLoaded={coursesLoaded} />}
       </div>
     </section>
+    {showSettings && <SettingsModal profile={profile} onClose={() => setShowSettings(false)} />}
+    {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
     {showCreate && <CreateModal owner={profile.fullName} onClose={() => setShowCreate(false)} onSave={createCourse} />}
     {showBulk && <BulkModal courses={courseData.filter((course) => course.status === "Published")} onClose={() => setShowBulk(false)} onSave={bulkEnroll} />}
     {toast && <div className="toast" role="status"><CheckCircle2 size={17} />{toast}</div>}
@@ -325,7 +337,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
 }
 
 function todayLabel() {
-  return new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
 function MetricCard({ label, value, delta, detail, icon, tone }: { label: string; value: string; delta: string; detail: string; icon: React.ReactNode; tone: string }) {
@@ -568,5 +580,63 @@ function DashboardBreakdown({ dashboard }: { dashboard: DashboardData }) {
       <div className="progress-total-bar">{dashboard.progressBreakdown.map((item) => <i key={item.progress} className={"progress-" + item.progress} style={{ width: String(totalProgress ? (item.count / totalProgress) * 100 : 0) + "%" }} />)}</div>
       <p className="breakdown-footnote">A learner’s state is tracked separately for every enrolled course.</p>
     </section>
+  </div>;
+}
+
+function Dropdown({ open, onToggle, onClose, button, children, align }: { open: boolean; onToggle: () => void; onClose: () => void; button: React.ReactElement<{ onClick?: () => void }>; children: React.ReactNode; align?: "right" }) {
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function onDown(event: MouseEvent) { if (root.current && !root.current.contains(event.target as Node)) onClose(); }
+    function onKey(event: KeyboardEvent) { if (event.key === "Escape") onClose(); }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open, onClose]);
+  return <div className="dropdown-root" ref={root}>{cloneElement(button, { onClick: onToggle })}{open && <div className={`popover-menu${align === "right" ? " align-right" : ""}`}>{children}</div>}</div>;
+}
+
+function SettingsModal({ profile, onClose }: { profile: WorkspaceProfile; onClose: () => void }) {
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [onClose]);
+  return <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-header"><div><p className="eyebrow">Workspace</p><h2 id="settings-title">Settings</h2></div><button className="icon-button subtle" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></div>
+      <p className="modal-copy">Your account and workspace, exactly as the system sees them.</p>
+      <div className="settings-block"><span className="settings-label">Account</span>
+        <div className="settings-row"><span>Name</span><strong>{profile.fullName}</strong></div>
+        <div className="settings-row"><span>Email</span><strong>{profile.email}</strong></div>
+        <div className="settings-row"><span>Role</span><strong>{profile.role}</strong></div>
+      </div>
+      <div className="settings-block"><span className="settings-label">Workspace</span>
+        <div className="settings-row"><span>Name</span><strong>Northstar Inc.</strong></div>
+        <div className="settings-row"><span>Type</span><strong>Learning workspace</strong></div>
+        <div className="settings-row"><span>Plan</span><strong>Free</strong></div>
+      </div>
+      <div className="settings-block"><span className="settings-label">About</span>
+        <div className="settings-row"><span>Product</span><strong>Kinship learning workspace</strong></div>
+        <div className="settings-row"><span>Source</span><a className="course-link" href="https://github.com/lovepreet-dev-dev/classesin" target="_blank" rel="noreferrer">View on GitHub <ArrowUpRight size={13} /></a></div>
+      </div>
+      <div className="modal-actions"><button className="button button-secondary" onClick={onClose}>Close</button></div>
+    </div>
+  </div>;
+}
+
+const whatsNew = [
+  { icon: Users, title: "Class roster on course pages", detail: "Every enrolled learner with a progress badge and per-lesson completion counts." },
+  { icon: CheckCircle2, title: "Live progress tracking", detail: "A real progress bar and completed-lesson states that update the moment a lesson is finished." },
+  { icon: BookOpen, title: "Honest counts everywhere", detail: "Catalogue and My-courses totals now show true enrollment numbers for every role." },
+  { icon: Upload, title: "Bulk enrollment with receipts", detail: "Each pasted address reports back: newly enrolled, already enrolled, or unknown." },
+  { icon: GraduationCap, title: "Quick-fill demo sign-in", detail: "One click fills any seeded demo account on the login page." },
+];
+
+function WhatsNewModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [onClose]);
+  return <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="whatsnew-title" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-header"><div><p className="eyebrow">Changelog</p><h2 id="whatsnew-title">What’s new in Kinship</h2></div><button className="icon-button subtle" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></div>
+      <p className="modal-copy">The latest improvements, shipped straight into this workspace.</p>
+      <div className="whatsnew-list">{whatsNew.map((item) => { const Icon = item.icon; return <div className="whatsnew-row" key={item.title}><div className="activity-icon"><Icon size={16} /></div><div><strong>{item.title}</strong><p>{item.detail}</p></div></div>; })}</div>
+      <div className="modal-actions"><button className="button button-primary" onClick={onClose}>Got it</button></div>
+    </div>
   </div>;
 }
