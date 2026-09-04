@@ -51,6 +51,19 @@ count behind "Showing x–y of n". Filtering never happens in the browser. The t
 and paging in the handler re-reads all matching rows per request — trivial at this scale; at 100×
 the data it would move to SQL `order()/range()` plus `count(head: true)` and a full-text index.
 
+## Deployment and configuration
+
+Vercel deploys `main` on every push; `vercel.json` pins the install and build commands. Three
+environment variables are required in production: `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The last one backs the audited
+service-role reads and writes described above — and when it is missing, those paths fail silently
+empty rather than loudly, which is exactly what happened once during development: learner
+dashboards rendered without their enrollment list until the variable was added. That incident is
+also why the deployment was verified end to end in the browser afterwards.
+`npm run seed:demo` resets the demo dataset through the service-role scripts; it wipes and
+reseeds courses, lessons, enrollments, completions, and activity, so it is a reset button rather
+than an idempotent top-up.
+
 ## Deliberately not built
 
 Quizzes, certificates, per-lesson discussion threads, video with watch-progress tracking, ratings,

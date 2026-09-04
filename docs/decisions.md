@@ -74,3 +74,15 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
 - **Later reversed:** the fixture shipped in the first build and was removed after the goal audit;
   removing it collapsed roughly ten demo branches in the course page into single server-backed
   paths and shrank the client bundle.
+
+## Decision 9
+
+- **Chose:** Merge true enrollment counts into the learner catalogue from the service role, after
+  the route has already resolved the caller and forced `status = 'published'` for non-instructors.
+- **Rejected:** Shipping the RLS-filtered count — a learner's `enrollments(count)` embed only sees
+  their own enrollment row, so every course showed 0 or 1 learners — or dropping the learners
+  column for learners altogether.
+- **Why:** The total is legitimate, non-sensitive catalogue data; showing a distorted value or
+  hiding it both misrepresent the system. The service read fetches one column (`course_id`) for
+  exactly the courses on the page, mirroring the audited roster-read pattern, and the service key
+  never reaches the browser.

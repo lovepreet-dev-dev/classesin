@@ -12,3 +12,10 @@ and learner-facing progress UI polish (progress bar, completed-lesson states). O
 replacing instant self-enrollment with a request/approve workflow — was built, then fully reverted
 when re-read against the brief; the reversal and its reasoning are recorded in decisions.md, and
 the revert itself (feature, migration, schema) is visible in git history.
+
+A final submission pass followed: a class roster on the course page (enrolled learners with
+per-learner completion counts), removal of the demo fallback so every action has exactly one
+server-backed path, a production configuration bug diagnosed and fixed (a missing service-role
+environment variable that blanked learner dashboards), an RLS count artifact corrected so learners
+see true enrollment counts instead of their own row, and a full browser end-to-end pass against
+the live deployment.

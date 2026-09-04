@@ -82,3 +82,24 @@ aggregation over all enrollment rows, policy-based activity-log immutability).
 The audit found a stale handoff note still describing the reverted enrollment-request migration as
 pending work. Documentation was cleaned up instead of rebuilding the feature, and the reversal was
 recorded as a decision rather than left as unexplained revert commits in the history.
+
+## Production end-to-end verification
+
+### Prompt
+
+“Test the deployed application end to end in a browser — login redirect, instructor flows, learner
+flows, lesson completion — and fix whatever the pass uncovers; then sharpen the submission docs.”
+
+### What you got
+
+A full pass over the live deployment: fresh-session login redirect, dashboard metrics and
+inactivity alerts, catalogue search with exact counts, the course roster, CSV export, learner
+self-service, and lesson completion walking the state machine — plus three real fixes the pass
+surfaced: RLS-distorted catalogue counts for learners, a missing enrollment tally in the
+my-courses API response, and a hardcoded zero in its UI mapping.
+
+### What you corrected
+
+One intermediate commit failed its typecheck and was corrected in the immediately following
+commit, before it could reach a deployment; the final state was re-verified in the browser against
+the live site and reflected in the submission docs.
