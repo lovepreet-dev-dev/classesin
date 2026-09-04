@@ -10,13 +10,16 @@ export const dynamic = "force-dynamic";
 export default async function CoursePage({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;
   const supabase = await createClient();
-  const { data: course } = await supabase
-    .from("courses")
-    .select("id,title,description,category,status,profiles!courses_instructor_id_fkey(full_name),lessons(id,title,content,position)")
-    .eq("id", courseId)
-    .single();
-
-  const { data: { user } } = await supabase.auth.getUser();
+  const [courseResult, userResult] = await Promise.all([
+    supabase
+      .from("courses")
+      .select("id,title,description,category,status,profiles!courses_instructor_id_fkey(full_name),lessons(id,title,content,position)")
+      .eq("id", courseId)
+      .single(),
+    supabase.auth.getUser(),
+  ]);
+  const { data: course } = courseResult;
+  const user = userResult.data.user;
   let viewerRole: "instructor" | "learner" | null = null;
   let viewerName: string | undefined;
   let enrollment = null;
@@ -46,30 +49,39 @@ export default async function CoursePage({ params }: { params: Promise<{ courseI
         courseRow = historyCourse;
         const { data: completions } = await service.from("lesson_completions").select("lesson_id").eq("enrollment_id", own.id);
         completedLessonIds = (completions ?? []).map((completion) => completion.lesson_id);
+        const { data: activityRows } = await supabase.from("course_activity_log").select("id,event,message,created_at,actor:profiles(full_name)").eq("course_id", courseId).order("created_at", { ascending: false }).limit(20);
+        activities = activityRows ?? [];
       }
     }
 
     if (viewerRole === "learner" && !enrollment) {
-      const { data } = await supabase.from("enrollments").select("id,progress").eq("course_id", courseId).eq("learner_id", user.id).maybeSingle();
-      enrollment = data;
-      if (data) {
-        const { data: completions } = await supabase.from("lesson_completions").select("lesson_id").eq("enrollment_id", data.id);
+      const [enrollmentResult, activityResult] = await Promise.all([
+        supabase.from("enrollments").select("id,progress").eq("course_id", courseId).eq("learner_id", user.id).maybeSingle(),
+        supabase.from("course_activity_log").select("id,event,message,created_at,actor:profiles(full_name)").eq("course_id", courseId).order("created_at", { ascending: false }).limit(20),
+      ]);
+      enrollment = enrollmentResult.data;
+      if (activityResult.data) activities = activityResult.data;
+      if (enrollment) {
+        const { data: completions } = await supabase.from("lesson_completions").select("lesson_id").eq("enrollment_id", enrollment.id);
         completedLessonIds = (completions ?? []).map((completion) => completion.lesson_id);
       }
     }
 
     if (viewerRole === "instructor") {
-      const { data: learnerRows } = await supabase.from("profiles").select("id,full_name,email").eq("role", "learner").order("full_name");
-      learners = learnerRows ?? [];
+      const service = createServiceClient();
+      const [learnerRowsResult, rosterRowsResult, activityResult] = await Promise.all([
+        supabase.from("profiles").select("id,full_name,email").eq("role", "learner").order("full_name"),
+        service
+          .from("enrollments")
+          .select("id,progress,learner:profiles!enrollments_learner_id_fkey(id,full_name,email),lesson_completions(lesson_id)")
+          .eq("course_id", courseId),
+        supabase.from("course_activity_log").select("id,event,message,created_at,actor:profiles(full_name)").eq("course_id", courseId).order("created_at", { ascending: false }).limit(20),
+      ]);
+      learners = learnerRowsResult.data ?? [];
       // RLS lets instructors read enrollments but not other learners'
       // lesson_completions, so the roster's completion counts come through
       // the service role after the instructor check above.
-      const service = createServiceClient();
-      const { data: rosterRows } = await service
-        .from("enrollments")
-        .select("id,progress,learner:profiles!enrollments_learner_id_fkey(id,full_name,email),lesson_completions(lesson_id)")
-        .eq("course_id", courseId);
-      roster = (rosterRows ?? []).map((row) => {
+      roster = (rosterRowsResult.data ?? []).map((row) => {
         const learner = Array.isArray(row.learner) ? row.learner[0] : row.learner;
         return {
           id: row.id,
@@ -79,11 +91,7 @@ export default async function CoursePage({ params }: { params: Promise<{ courseI
           completedLessons: (row.lesson_completions ?? []).length,
         };
       });
-    }
-
-    if (courseRow) {
-      const { data: activityRows } = await supabase.from("course_activity_log").select("id,event,message,created_at,actor:profiles(full_name)").eq("course_id", courseId).order("created_at", { ascending: false }).limit(20);
-      activities = activityRows ?? [];
+      if (activityResult.data) activities = activityResult.data;
     }
   }
 
