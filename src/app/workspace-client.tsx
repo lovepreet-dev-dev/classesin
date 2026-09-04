@@ -124,50 +124,35 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   }, [deferredQuery, category, status, instructorFilter, sort, page, isInstructor, instructors]);
 
   useEffect(() => {
-    if (!isInstructor) return;
-    fetch("/api/instructors").then(async (response) => {
+    fetch("/api/bootstrap").then(async (response) => {
       if (!response.ok) return;
       const payload = await response.json();
-      setInstructors((payload.instructors ?? []).map((item: { id: string; full_name: string }) => ({ id: item.id, fullName: item.full_name })));
-    }).catch(() => undefined);
-  }, [isInstructor]);
-
-  useEffect(() => {
-    if (isInstructor) return;
-    fetch("/api/enrollments").then(async (response) => {
-      if (!response.ok) return;
-      const payload = await response.json();
-      const enrollments = (payload.enrollments ?? []) as { progress: string; enrollments?: { count?: number }[]; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
-      const rows: Course[] = [];
-      const progressByCourse: Record<string, Progress> = {};
-      for (const item of enrollments) {
-        const course = item.courses;
-        if (!course) continue;
-        const profileData = Array.isArray(course.profiles) ? course.profiles[0] : course.profiles;
-        rows.push({
-          id: course.id, title: course.title, description: course.description, category: course.category,
-          instructor: profileData?.full_name ?? null,
-          status: titleCase(course.status) as Status,
-          lessons: course.lessons?.length ?? 0,
-          learners: Array.isArray(item.enrollments) ? item.enrollments.reduce((total, row) => total + Number(row.count ?? 0), 0) : 0,
-          progress: titleCase(item.progress) as Progress,
-          updated: "Enrolled course",
-          accent: accentByCategory[course.category] ?? "slate",
-        });
-        progressByCourse[course.id] = titleCase(item.progress) as Progress;
+      if (payload.dashboard) setDashboard(payload.dashboard);
+      if (payload.instructors) setInstructors((payload.instructors as { id: string; full_name: string }[]).map((item) => ({ id: item.id, fullName: item.full_name })));
+      if (payload.enrollments) {
+        const enrollments = (payload.enrollments ?? []) as { progress: string; enrollments?: { count?: number }[]; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
+        const rows: Course[] = [];
+        const progressByCourse: Record<string, Progress> = {};
+        for (const item of enrollments) {
+          const course = item.courses;
+          if (!course) continue;
+          const profileData = Array.isArray(course.profiles) ? course.profiles[0] : course.profiles;
+          rows.push({
+            id: course.id, title: course.title, description: course.description, category: course.category,
+            instructor: profileData?.full_name ?? null,
+            status: titleCase(course.status) as Status,
+            lessons: course.lessons?.length ?? 0,
+            learners: Array.isArray(item.enrollments) ? item.enrollments.reduce((total, row) => total + Number(row.count ?? 0), 0) : 0,
+            progress: titleCase(item.progress) as Progress,
+            updated: "Enrolled course",
+            accent: accentByCategory[course.category] ?? "slate",
+          });
+          progressByCourse[course.id] = titleCase(item.progress) as Progress;
+        }
+        setEnrolledCourses(rows);
+        setEnrollmentProgress(progressByCourse);
       }
-      setEnrolledCourses(rows);
-      setEnrollmentProgress(progressByCourse);
-    }).catch(() => undefined);
-  }, [isInstructor]);
-
-  useEffect(() => {
-    if (!isInstructor) return;
-    fetch("/api/dashboard").then(async (response) => { if (response.ok) setDashboard(await response.json()); }).catch(() => undefined);
-    fetch("/api/alerts").then(async (response) => {
-      if (!response.ok) return;
-      const payload = await response.json();
-      setAlerts((payload.alerts ?? []).map((item: { id: string; last_progress_at?: string; courses?: { title?: string } | { title?: string }[]; profiles?: { full_name?: string } | { full_name?: string }[] }, index: number) => {
+      if (payload.alerts) setAlerts((payload.alerts as { id: string; last_progress_at?: string; courses?: { title?: string } | { title?: string }[]; profiles?: { full_name?: string } | { full_name?: string }[] }[]).map((item, index) => {
         const course = Array.isArray(item.courses) ? item.courses[0] : item.courses;
         const learner = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
         const name = learner?.full_name ?? "Learner";
@@ -178,13 +163,9 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
           tone: tones[index % tones.length],
         };
       }));
+      if (payload.people) setPeople((payload.people as { id: string; full_name: string; email: string; courses: number; progress: string; last_active: string | null }[]).map((item, index) => ({ id: item.id, name: item.full_name, email: item.email, courses: item.courses, progress: titleCase(item.progress) as Progress, lastActive: item.last_active ? new Date(item.last_active).toLocaleDateString() : "Not started", tone: tones[index % tones.length] })));
+      if (payload.activity) setActivity(payload.activity);
     }).catch(() => undefined);
-    fetch("/api/people").then(async (response) => {
-      if (!response.ok) return;
-      const payload = await response.json();
-      setPeople((payload.people ?? []).map((item: { id: string; full_name: string; email: string; courses: number; progress: string; last_active: string | null }, index: number) => ({ id: item.id, name: item.full_name, email: item.email, courses: item.courses, progress: titleCase(item.progress) as Progress, lastActive: item.last_active ? new Date(item.last_active).toLocaleDateString() : "Not started", tone: tones[index % tones.length] })));
-    }).catch(() => undefined);
-    fetch("/api/activity").then(async (response) => { if (response.ok) setActivity((await response.json()).activity ?? []); }).catch(() => undefined);
   }, [isInstructor]);
 
   const filtered = useMemo(() => {
