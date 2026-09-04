@@ -240,3 +240,30 @@ A reviewer-first SUBMISSION.md with a five-minute tour, a prompt log that maps o
 history (this file), a deployment-and-configuration section in architecture.md including the
 missing-env-var incident, decision 9 documenting the RLS count fix, and a schema doc that
 explains why each 100× bottleneck actually breaks.
+
+## 14. Interface polish, honest stats, and the deploy (commits `92d55b4` → `72e0c9b`)
+
+### Prompt
+
+“Some UI components are not clickable — the settings button, top-right profile button, top-left
+workspace dropdown, and the see-what's-new banner make a bad impression. Improve them. Then make
+sure design titles and stats are self-explanatory, the catalogue should look like actual courses,
+minimal and fast. Any stat must not be hardcoded — dummy data can be fed but not hardcoded. Work
+on a separate branch.”
+
+### What you got
+
+Real popover menus for the workspace switcher and profile avatar (with sign-out), a settings
+modal showing the account and workspace exactly as the system sees them, and a changelog modal
+listing genuinely shipped updates. The polish pass then replaced the hardcoded percentage in
+learner progress bars with real per-course completion counts from lesson data, gave instructors a
+per-course completion column in the catalogue, resolved instructor names for learners, and pinned
+the greeting date locale to fix a hydration mismatch the dev overlay exposed.
+
+### What you corrected
+
+The first dropdown version rendered the trigger without attaching its click handler — caught
+immediately because the popover would not open. The pass also surfaced two real artifacts: a
+learner catalogue row showing "By Kinship" because RLS hides the instructor's profile (fixed by
+extending the audited service-role merge), and an alert badge clamping quiet days to a minimum of
+15. Everything was verified in the browser against the merged result before deploying.

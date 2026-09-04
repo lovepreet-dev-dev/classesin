@@ -17,7 +17,7 @@ result. There is no database query in client code and no service-role key anywhe
 bundle. This is the first enforcement boundary — nothing sensitive can leak through the client
 because nothing sensitive is in it.
 
-**One API surface owns every read and write.** Seventeen route handlers under `src/app/api/**`
+**One API surface owns every read and write.** Eighteen route handlers under `src/app/api/**`
 are the only code that talks to Postgres. Every handler follows the same discipline: read the
 session, resolve the caller's role from `profiles` (`src/lib/auth.ts`), and refuse with a real
 status code and a human-readable message *before* anything is written — 401 unauthenticated, 403

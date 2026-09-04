@@ -58,3 +58,10 @@ environment variable that silently blanked learner dashboards), an RLS count art
 so learners see true enrollment counts instead of their own row, and a full browser end-to-end
 pass against the live deployment — login redirect, both roles, search, roster, CSV, and lesson
 completion.
+
+An interface pass on a separate branch closed the gap between working and presentable: every
+control that looked clickable now opens something real (workspace menu, profile menu, settings,
+changelog), learner progress bars read real lesson-completion counts instead of a placeholder
+percentage, instructors see per-course completion in the catalogue, and a hydration mismatch in
+the greeting date was fixed. The branch was verified with lint, production builds, and browser
+checks before it was fast-forward merged into `main`.
