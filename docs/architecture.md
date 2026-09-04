@@ -13,11 +13,13 @@
   requests to `/login`.
 - **Supabase (managed)** — Auth owns email/password sessions; Postgres owns data, constraints and
   row-level security. The app talks to it with two clients: the SSR anon-key client (RLS enforced,
-  the default everywhere) and a service-role client (`src/lib/supabase/service.ts`) used in exactly
-  three audited places where RLS would hide legitimate data — the learner enrollment list (so
-  archived courses stay visible to enrolled learners), instructor roster reads on the course page,
-  and enrollment inserts made on a learner's behalf. Every service-role call site verifies the
-  caller's role server-side first; the service key never reaches the browser.
+  the default everywhere) and a service-role client (`src/lib/supabase/service.ts`) used in a
+  small, audited set of places where RLS would hide or distort legitimate data — the learner
+  enrollment list (so archived courses stay visible to enrolled learners), instructor roster reads
+  and learner counts on the course page and catalogue (RLS would block reading other learners'
+  lesson completions or limit a learner's count embed to their own row), and enrollment inserts
+  made on a learner's behalf. Every service-role call site verifies the caller's role server-side
+  first; the service key never reaches the browser.
 - **Seeding** — `npm run seed:demo` (service-role scripts, deterministic UUIDs) resets a demo
   dataset: 20 accounts, 18 courses × 8 lessons, 42 enrollments with completions and deliberately
   quiet learners so the alerts view has something to show.

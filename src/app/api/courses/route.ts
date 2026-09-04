@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, hasRole } from "@/lib/auth";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export async function GET(request: NextRequest) {
   const { supabase, user, profile } = await getAuthContext();
@@ -24,6 +25,16 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   const rows = [...(data ?? [])];
+  // RLS limits a learner's enrollments(count) embed to their own enrollment,
+  // so the catalogue's learner counts come from the service role after the
+  // role-checked, published-only query above.
+  if (!hasRole(profile, "instructor") && rows.length) {
+    const service = createServiceClient();
+    const { data: enrolled } = await service.from("enrollments").select("course_id").in("course_id", rows.map((row) => row.id));
+    const tally = new Map<string, number>();
+    for (const row of enrolled ?? []) tally.set(row.course_id, (tally.get(row.course_id) ?? 0) + 1);
+    for (const row of rows) row.enrollments = [{ count: tally.get(row.id) ?? 0 }];
+  }
   rows.sort((a, b) => {
     if (sort === "title") return a.title.localeCompare(b.title);
     if (sort === "enrollment_count") return (Number(b.enrollments?.[0]?.count ?? 0) - Number(a.enrollments?.[0]?.count ?? 0)) || a.title.localeCompare(b.title);
