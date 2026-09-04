@@ -12,7 +12,10 @@ export async function GET() {
   const supabase = createServiceClient();
   const { data, error } = await supabase.from("enrollments").select("id,progress,enrolled_at,started_at,completed_at,last_progress_at,courses(id,title,description,category,status,profiles!courses_instructor_id_fkey(full_name),lessons(id,title,content,position),enrollments(count))").eq("learner_id", user.id).order("enrolled_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  const rows = (data ?? []).map((row) => ({ ...row, enrollments: row.courses?.enrollments ?? [] }));
+  const rows = (data ?? []).map((row) => {
+    const course = Array.isArray(row.courses) ? row.courses[0] : row.courses;
+    return { ...row, enrollments: course?.enrollments ?? [] };
+  });
   return NextResponse.json({ enrollments: rows });
 }
 
