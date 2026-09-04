@@ -27,6 +27,15 @@ type DashboardData = {
   progressBreakdown: { progress: string; count: number }[];
 };
 
+type BootstrapPayload = {
+  dashboard?: DashboardData;
+  instructors?: { id: string; full_name: string }[];
+  enrollments?: { progress: string; enrolled_at?: string; enrollments?: { count?: number }[]; lesson_completions?: { count?: number }[]; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
+  alerts?: { id: string; last_progress_at?: string; courses?: { title?: string } | { title?: string }[]; profiles?: { full_name?: string } | { full_name?: string }[] }[];
+  people?: { id: string; full_name: string; email: string; courses: number; progress: string; last_active: string | null }[];
+  activity?: ActivityItem[];
+};
+
 const categories = ["All categories", "Compliance", "Leadership", "Skills", "People", "Product", "Operations", "Communication"];
 const tones: Tone[] = ["lavender", "coral", "mint", "yellow", "blue", "slate"];
 const accentByCategory: Record<string, Tone> = { Compliance: "coral", Leadership: "lavender", Skills: "mint", People: "blue", Product: "yellow", Operations: "slate", Communication: "coral" };
@@ -100,6 +109,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   const [menu, setMenu] = useState<"workspace" | "profile" | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [bootLoaded, setBootLoaded] = useState(false);
   const pageSize = 8;
   const firstName = profile.fullName.split(" ")[0];
 
@@ -129,16 +139,14 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
   }, [deferredQuery, category, status, instructorFilter, sort, page, isInstructor, instructors]);
 
   useEffect(() => {
-    fetch("/api/bootstrap").then(async (response) => {
-      if (!response.ok) return;
-      const payload = await response.json();
+    const cacheKey = "kinship-bootstrap-" + profile.id;
+    const hydrate = (payload: BootstrapPayload) => {
       if (payload.dashboard) setDashboard(payload.dashboard);
-      if (payload.instructors) setInstructors((payload.instructors as { id: string; full_name: string }[]).map((item) => ({ id: item.id, fullName: item.full_name })));
+      if (payload.instructors) setInstructors((payload.instructors).map((item) => ({ id: item.id, fullName: item.full_name })));
       if (payload.enrollments) {
-        const enrollments = (payload.enrollments ?? []) as { progress: string; enrolled_at?: string; enrollments?: { count?: number }[]; lesson_completions?: { count?: number }[]; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
         const rows: Course[] = [];
         const progressByCourse: Record<string, Progress> = {};
-        for (const item of enrollments) {
+        for (const item of payload.enrollments) {
           const course = item.courses;
           if (!course) continue;
           const profileData = Array.isArray(course.profiles) ? course.profiles[0] : course.profiles;
@@ -158,7 +166,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
         setEnrolledCourses(rows);
         setEnrollmentProgress(progressByCourse);
       }
-      if (payload.alerts) setAlerts((payload.alerts as { id: string; last_progress_at?: string; courses?: { title?: string } | { title?: string }[]; profiles?: { full_name?: string } | { full_name?: string }[] }[]).map((item, index) => {
+      if (payload.alerts) setAlerts(payload.alerts.map((item, index) => {
         const course = Array.isArray(item.courses) ? item.courses[0] : item.courses;
         const learner = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
         const name = learner?.full_name ?? "Learner";
@@ -169,10 +177,24 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
           tone: tones[index % tones.length],
         };
       }));
-      if (payload.people) setPeople((payload.people as { id: string; full_name: string; email: string; courses: number; progress: string; last_active: string | null }[]).map((item, index) => ({ id: item.id, name: item.full_name, email: item.email, courses: item.courses, progress: titleCase(item.progress) as Progress, lastActive: item.last_active ? new Date(item.last_active).toLocaleDateString() : "Not started", tone: tones[index % tones.length] })));
+      if (payload.people) setPeople(payload.people.map((item, index) => ({ id: item.id, name: item.full_name, email: item.email, courses: item.courses, progress: titleCase(item.progress) as Progress, lastActive: item.last_active ? new Date(item.last_active).toLocaleDateString() : "Not started", tone: tones[index % tones.length] })));
       if (payload.activity) setActivity(payload.activity);
-    }).catch(() => undefined);
-  }, [isInstructor]);
+      setBootLoaded(true);
+    };
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { t: number; payload: BootstrapPayload };
+        if (parsed.payload && Date.now() - parsed.t < 30000) hydrate(parsed.payload);
+      }
+    } catch {}
+    fetch("/api/bootstrap").then(async (response) => {
+      if (!response.ok) { setBootLoaded(true); return; }
+      const payload = (await response.json()) as BootstrapPayload;
+      hydrate(payload);
+      try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), payload })); } catch {}
+    }).catch(() => setBootLoaded(true));
+  }, [profile.id, isInstructor]);
 
   const filtered = useMemo(() => {
     const source = isInstructor ? courseData : courseData.map((course) => ({ ...course, progress: enrollmentProgress[course.id] ?? course.progress }));
@@ -281,25 +303,25 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
             <button className="button button-primary" onClick={() => setShowCreate(true)}><Plus size={17} /> Create course</button>
           </div>
           <div className="metric-grid">
-            <MetricCard label="Total learners" value={String(dashboard.totalLearners)} delta="" detail="registered learners" icon={<Users size={18} />} tone="lavender" />
-            <MetricCard label="Published courses" value={String(dashboard.publishedCourses)} delta="" detail="live in the catalog" icon={<BookOpen size={18} />} tone="mint" />
-            <MetricCard label="Completions this month" value={String(dashboard.completionsThisMonth)} delta="" detail="courses finished" icon={<CheckCircle2 size={18} />} tone="yellow" />
-            <MetricCard label="In progress" value={String(dashboard.inProgress)} delta="" detail="learners mid-course" icon={<Clock3 size={18} />} tone="coral" />
+            <MetricCard label="Total learners" value={String(dashboard.totalLearners)} delta="" detail="registered learners" icon={<Users size={18} />} tone="lavender" loading={!bootLoaded} />
+            <MetricCard label="Published courses" value={String(dashboard.publishedCourses)} delta="" detail="live in the catalog" icon={<BookOpen size={18} />} tone="mint" loading={!bootLoaded} />
+            <MetricCard label="Completions this month" value={String(dashboard.completionsThisMonth)} delta="" detail="courses finished" icon={<CheckCircle2 size={18} />} tone="yellow" loading={!bootLoaded} />
+            <MetricCard label="In progress" value={String(dashboard.inProgress)} delta="" detail="learners mid-course" icon={<Clock3 size={18} />} tone="coral" loading={!bootLoaded} />
           </div>
           <div className="dashboard-grid">
             <section className="panel chart-panel">
               <div className="panel-header"><div><p className="eyebrow">Momentum</p><h2>Completions over time</h2></div><span className="chart-total">{dashboard.completionTotal} <small>completions · 8 weeks</small></span></div>
               <div className="chart-legend"><span><i className="legend-dot coral-dot" />Completions</span></div>
-              <div className="chart-wrap"><CompletionChart weekly={dashboard.weekly} /></div>
+              <div className="chart-wrap">{bootLoaded ? <CompletionChart weekly={dashboard.weekly} /> : <div className="skeleton-block" style={{ height: "100%" }} />}</div>
             </section>
             <section className="panel alerts-panel">
               <div className="panel-header"><div><p className="eyebrow">Needs a nudge</p><h2>Inactivity alerts <span className="count-pill">{alerts.length}</span></h2></div><button className="text-button" onClick={() => setActive("Activity")}>View all <ArrowUpRight size={14} /></button></div>
               <p className="panel-caption">Learners who haven’t made progress in 14+ days.</p>
-              <div className="alert-list">{alerts.map((alert) => <div className="alert-row" key={alert.id}><Avatar initials={alert.initials} tone={alert.tone} /><div className="alert-copy"><strong>{alert.name}</strong><span>{alert.course}</span></div><span className="alert-days">{alert.days}d quiet</span><button className="dismiss-button" aria-label={`Dismiss ${alert.name} alert`} onClick={() => dismissAlert(alert)}><X size={14} /></button></div>)}</div>
-              {alerts.length === 0 && <div className="empty-alerts"><ShieldCheck size={24} /><span>All caught up for now.</span></div>}
+              {!bootLoaded ? <div className="skeleton-block" style={{ height: 90 }} /> : <div className="alert-list">{alerts.map((alert) => <div className="alert-row" key={alert.id}><Avatar initials={alert.initials} tone={alert.tone} /><div className="alert-copy"><strong>{alert.name}</strong><span>{alert.course}</span></div><span className="alert-days">{alert.days}d quiet</span><button className="dismiss-button" aria-label={`Dismiss ${alert.name} alert`} onClick={() => dismissAlert(alert)}><X size={14} /></button></div>)}
+              {alerts.length === 0 && <div className="empty-alerts"><ShieldCheck size={24} /><span>All caught up for now.</span></div>}</div>}
             </section>
           </div>
-          {dashboardBreakdown}
+          {bootLoaded && dashboardBreakdown}
           <section className="panel course-panel">
             <div className="panel-header course-panel-header">
               <div><p className="eyebrow">Catalogue</p><h2>Courses <span className="count-pill soft">{totalMatches}</span></h2></div>
@@ -317,13 +339,13 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
             </div>
             <button className="button button-primary" onClick={() => setActive("Courses")}><Library size={17} /> Browse courses</button>
           </div>
-          <div className="metric-grid">{learnerStats.map((stat) => <MetricCard key={stat.label} label={stat.label} value={String(stat.value)} delta={stat.delta} detail={stat.detail} icon={stat.icon} tone={stat.tone} />)}</div>
+          <div className="metric-grid">{learnerStats.map((stat) => <MetricCard key={stat.label} label={stat.label} value={String(stat.value)} delta={stat.delta} detail={stat.detail} icon={stat.icon} tone={stat.tone} loading={!bootLoaded} />)}</div>
           <section className="panel course-panel">
             <div className="panel-header course-panel-header">
               <div><p className="eyebrow">Your learning</p><h2>My courses <span className="count-pill soft">{enrolledCourses.length}</span></h2></div>
               <button className="text-button" onClick={() => setActive("Courses")}>Find more courses <ArrowUpRight size={14} /></button>
             </div>
-            <CourseTable courses={enrolledCourses} role="Learner" loading={false} updatedLabel="Enrolled" />
+            <CourseTable courses={enrolledCourses} role="Learner" loading={!bootLoaded} updatedLabel="Enrolled" />
           </section>
         </>)}
         {active !== "Overview" && <SecondaryView active={active} filtered={filtered} totalMatches={totalMatches} page={page} pageSize={pageSize} setPage={setPage} role={role} query={query} setQuery={setQuery} category={category} setCategory={setCategory} status={status} setStatus={setStatus} instructorFilter={instructorFilter} setInstructorFilter={setInstructorFilter} sort={sort} setSort={setSort} showFilters={showFilters} setShowFilters={setShowFilters} clearFilters={clearFilters} people={people} activity={activity} alerts={alerts} onCreate={() => setShowCreate(true)} onBulk={() => setShowBulk(true)} instructors={instructors} coursesLoaded={coursesLoaded} breakdown={isInstructor ? dashboard.courseBreakdown : undefined} />}
@@ -341,8 +363,8 @@ function todayLabel() {
   return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-function MetricCard({ label, value, delta, detail, icon, tone }: { label: string; value: string; delta: string; detail: string; icon: React.ReactNode; tone: string }) {
-  return <div className="metric-card"><div className={`metric-icon icon-${tone}`}>{icon}</div><p>{label}</p><div className="metric-value">{value}</div><div className="metric-change">{delta && <span>{delta}</span>} {detail}</div></div>;
+function MetricCard({ label, value, delta, detail, icon, tone, loading }: { label: string; value: string; delta: string; detail: string; icon: React.ReactNode; tone: string; loading?: boolean }) {
+  return <div className="metric-card"><div className={`metric-icon icon-${tone}`}>{icon}</div><p>{label}</p>{loading ? <><div className="skeleton-block" style={{ width: 64 }} /><div className="skeleton-block" style={{ width: 120, height: 13 }} /></> : <><div className="metric-value">{value}</div><div className="metric-change">{delta && <span>{delta}</span>} {detail}</div></>}</div>;
 }
 
 function CourseToolbar({ query, setQuery, category, setCategory, status, setStatus, instructorFilter, setInstructorFilter, sort, setSort, showFilters, setShowFilters, clearFilters, instructors }: {
