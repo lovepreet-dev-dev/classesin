@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` and sign in with one of the 20 seeded demo accounts — shared password `Demo123!` — listed in [`SUBMISSION.md`](./SUBMISSION.md). The app requires the Supabase environment variables; there is no offline demo mode.
+Open `http://localhost:3000` and sign in with one of the 20 seeded demo accounts — shared password `Demo123!` — listed in [`SUBMISSION.md`](./SUBMISSION.md). The login page also offers one-click fill for a demo instructor and learner. The app requires the Supabase environment variables; there is no offline demo mode.
 
 ## Supabase setup
 
