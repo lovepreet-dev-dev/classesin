@@ -137,7 +137,7 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
     fetch("/api/enrollments").then(async (response) => {
       if (!response.ok) return;
       const payload = await response.json();
-      const enrollments = (payload.enrollments ?? []) as { progress: string; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
+      const enrollments = (payload.enrollments ?? []) as { progress: string; enrollments?: { count?: number }[]; courses?: { id: string; title: string; description: string; category: string; status: string; updated_at?: string; profiles?: { full_name?: string } | { full_name?: string }[]; lessons?: unknown[] } | null }[];
       const rows: Course[] = [];
       const progressByCourse: Record<string, Progress> = {};
       for (const item of enrollments) {
@@ -148,7 +148,8 @@ export default function WorkspaceClient({ profile }: { profile: WorkspaceProfile
           id: course.id, title: course.title, description: course.description, category: course.category,
           instructor: profileData?.full_name ?? null,
           status: titleCase(course.status) as Status,
-          lessons: course.lessons?.length ?? 0, learners: 0,
+          lessons: course.lessons?.length ?? 0,
+          learners: Array.isArray(item.enrollments) ? item.enrollments.reduce((total, row) => total + Number(row.count ?? 0), 0) : 0,
           progress: titleCase(item.progress) as Progress,
           updated: "Enrolled course",
           accent: accentByCategory[course.category] ?? "slate",
