@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, ArrowUp, Archive, CheckCircle2, Circle, Download, Edit3, Loader2, MessageSquare, Plus, RotateCcw, Send, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Archive, CheckCircle2, Circle, Download, Edit3, Loader2, MessageSquare, Plus, RotateCcw, Send, Trash2, Upload, UserPlus, X } from "lucide-react";
 
 type Lesson = { id: string; title: string; content: string; position: number };
 type Learner = { id: string; full_name: string; email: string };
 type Activity = { id: string; event: string; message: string | null; created_at: string; actor?: { full_name?: string } | { full_name?: string }[] };
 type RosterEntry = { id: string; fullName: string; email: string; progress: string; completedLessons: number };
+type BulkResult = { email: string; status: "unknown" | "already_enrolled" | "newly_enrolled" | "error" };
 type Course = { id: string; title: string; description: string; category: string; status: string; instructor?: string; lessons: Lesson[] };
 type Props = { course: Course; enrollment: { id: string; progress: string } | null; completedLessonIds: string[]; viewerRole: "instructor" | "learner" | null; learners: Learner[]; roster?: RosterEntry[]; activities?: Activity[]; viewerName?: string };
 
@@ -26,6 +28,7 @@ function avatarTone(id: string) {
 }
 
 export default function CourseDetailClient({ course: initialCourse, enrollment: initialEnrollment, completedLessonIds, viewerRole, learners, roster: initialRoster = [], activities: initialActivities = [], viewerName = "You" }: Props) {
+  const router = useRouter();
   const [course, setCourse] = useState(initialCourse);
   const [enrollment, setEnrollment] = useState(initialEnrollment);
   const [completed, setCompleted] = useState<string[]>(completedLessonIds);
@@ -39,6 +42,9 @@ export default function CourseDetailClient({ course: initialCourse, enrollment: 
   const [showLessonEditor, setShowLessonEditor] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [showCourseEditor, setShowCourseEditor] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [syncedRoster, setSyncedRoster] = useState(initialRoster);
+  if (initialRoster !== syncedRoster) { setSyncedRoster(initialRoster); setRoster(initialRoster); }
 
   const canEnroll = course.status === "published";
   const lessonTotal = course.lessons.length;
@@ -152,6 +158,12 @@ export default function CourseDetailClient({ course: initialCourse, enrollment: 
     } catch (error) { showNotice(error instanceof Error ? error.message : "Could not add comment"); } finally { setPending(null); }
   }
 
+  function handleBulkEnrolled(results: BulkResult[]) {
+    const newly = results.filter((row) => row.status === "newly_enrolled");
+    if (newly.length) router.refresh();
+    showNotice(`${newly.length} of ${results.length} addresses enrolled`);
+  }
+
   return (
     <main className="detail-shell">
       <header className="detail-topbar">
@@ -250,6 +262,7 @@ export default function CourseDetailClient({ course: initialCourse, enrollment: 
                 <button className="button button-primary" onClick={enroll} disabled={!canEnroll || pending !== null || learners.length === 0}>
                   {pending === "enroll" ? <><Loader2 size={15} className="spin" /> Enrolling…</> : <><UserPlus size={15} /> Enroll learner</>}
                 </button>
+                <button className="button button-secondary" onClick={() => setShowBulk(true)} disabled={!canEnroll}><Upload size={15} /> Bulk enroll</button>
                 {!canEnroll && <small className="status-hint">Publish this course before enrolling learners.</small>}
                 {enrolledLearner && <small className="status-success">✓ {enrolledLearner}</small>}
               </div>
@@ -323,6 +336,7 @@ export default function CourseDetailClient({ course: initialCourse, enrollment: 
       </div>
       {showCourseEditor && <CourseEditor course={course} onClose={() => setShowCourseEditor(false)} onSave={saveCourse} saving={pending === "course"} />}
       {showLessonEditor && <LessonEditor lesson={editingLesson} onClose={() => { setShowLessonEditor(false); setEditingLesson(null); }} onSave={saveLesson} saving={pending === "lesson"} />}
+      {showBulk && <BulkEnrollModal courseId={course.id} onClose={() => setShowBulk(false)} onEnrolled={handleBulkEnrolled} />}
     </main>
   );
 }
@@ -390,4 +404,61 @@ function LessonEditor({ lesson, onClose, onSave, saving }: { lesson: Lesson | nu
       </div>
     </div>
   );
+}
+
+const bulkStatusLabels: Record<BulkResult["status"], string> = { newly_enrolled: "Newly enrolled", already_enrolled: "Already enrolled", unknown: "Unknown address", error: "Could not process" };
+const bulkStatusBadge: Record<BulkResult["status"], string> = { newly_enrolled: "badge-completed", already_enrolled: "badge-draft", unknown: "badge-archived", error: "badge-in-progress" };
+
+function BulkEnrollModal({ courseId, onClose, onEnrolled }: { courseId: string; onClose: () => void; onEnrolled: (results: BulkResult[]) => void }) {
+  const [emails, setEmails] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [results, setResults] = useState<BulkResult[] | null>(null);
+  const [error, setError] = useState("");
+  function importCsv(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const lines = String(reader.result ?? "").split(/\r?\n/).map((line) => line.split(",")[0]?.trim().replaceAll('"', "") ?? "");
+      if (lines.length && /^[,"'\s]*email/i.test(lines[0])) lines.shift();
+      setEmails(lines.filter(Boolean).join("\n"));
+    };
+    reader.readAsText(file);
+  }
+  async function save() {
+    setSaving(true); setError("");
+    try {
+      const response = await fetch("/api/enrollments/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseId, emails: [...new Set(emails.split(/[\n,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean))] }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not enroll learners");
+      const list = (result.results ?? []) as BulkResult[];
+      setResults(list);
+      onEnrolled(list);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not enroll learners"); } finally { setSaving(false); }
+  }
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [onClose]);
+  return <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-enroll-title" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-header"><div><p className="eyebrow">Enrollment tools</p><h2 id="bulk-enroll-title">Bulk enroll learners</h2></div><button className="icon-button subtle" aria-label="Close dialog" onClick={onClose}><X size={18} /></button></div>
+      {results ? <>
+        <p className="modal-copy">Each address has been checked. Unregistered addresses are reported as unknown — they need an account before they can be enrolled.</p>
+        <div className="bulk-summary">
+          <strong>{results.filter((row) => row.status === "newly_enrolled").length} newly enrolled</strong>
+          <span>{results.filter((row) => row.status === "already_enrolled").length} already enrolled</span>
+          <span>{results.filter((row) => row.status === "unknown").length} unknown</span>
+        </div>
+        <div className="bulk-results">{results.map((row) => <div key={row.email}><span>{row.email}</span><span className={`badge ${bulkStatusBadge[row.status]}`}>{bulkStatusLabels[row.status]}</span></div>)}</div>
+        <div className="modal-actions"><button className="button button-primary" onClick={onClose}>Done</button></div>
+      </> : <>
+        <p className="modal-copy">Paste one email per line or upload a CSV. Only registered learner accounts can be enrolled — anything else is reported as unknown, never silently created.</p>
+        <label>Email addresses<textarea value={emails} onChange={(event) => setEmails(event.target.value)} placeholder={"learner@northstar.co\nnew.learner@northstar.co"} rows={5} /></label>
+        <label className="upload-drop"><Upload size={18} /><span><strong>Upload CSV</strong><small>one address per row — the first column is used</small></span><input type="file" accept=".csv,text/csv" onChange={importCsv} /></label>
+        {error && <p className="modal-error">{error}</p>}
+        <div className="modal-actions">
+          <button className="button button-secondary" onClick={onClose}>Cancel</button>
+          <button className="button button-primary" disabled={!emails.trim() || saving} onClick={save}>{saving ? <><Loader2 size={15} className="spin" /> Reviewing…</> : <><Upload size={15} /> Review enrollments</>}</button>
+        </div>
+      </>}
+    </div>
+  </div>;
 }
