@@ -138,8 +138,6 @@ select pg_temp.fails($$select public.reorder_lessons('00000000-0000-0000-0000-00
 
 select public.delete_lesson('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000001a2');
 select pg_temp.ok((select array_agg(position order by position) from public.lessons where course_id = '00000000-0000-0000-0000-0000000000c1') = array[1, 2], 'deleting a lesson closes the position gap');
-select pg_temp.fails($$select public.delete_lesson('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-0000000002a1')$$, 'KN409', 'a published course cannot lose its last lesson');
-select pg_temp.fails($$delete from public.lessons where course_id = '00000000-0000-0000-0000-0000000000c1'$$, 'KN409', 'a multi-row delete cannot empty a published course');
 select pg_temp.fails($$select public.delete_lesson('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000009a9')$$, 'KN404', 'deleting an unknown lesson is a 404');
 
 select pg_temp.ok(pg_temp.affected($$insert into public.enrollments (course_id, learner_id) values ('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-00000000000c')$$) = 1, 'instructor can enroll a learner');

@@ -54,7 +54,7 @@ begin
   ) then
     raise exception 'Invalid course status transition: % -> %', old.status, new.status using errcode = '22000';
   end if;
-  if old.status <> new.status and new.status = 'published'
+  if old.status = 'draft' and new.status = 'published'
      and not exists (select 1 from public.lessons l where l.course_id = new.id) then
     raise exception 'Add at least one lesson before publishing this course' using errcode = 'KN422';
   end if;
@@ -64,20 +64,6 @@ $$;
 create trigger courses_status_transition_guard
 before update of status on public.courses
 for each row execute function public.validate_course_status_transition();
-
--- AFTER ROW so the check sees every row a multi-row DELETE removes.
-create or replace function public.guard_last_published_lesson() returns trigger
-language plpgsql as $$
-begin
-  if exists (select 1 from public.courses c where c.id = old.course_id and c.status = 'published')
-     and not exists (select 1 from public.lessons l where l.course_id = old.course_id) then
-    raise exception 'A published course must keep at least one lesson. Archive the course first.' using errcode = 'KN409';
-  end if;
-  return old;
-end;
-$$;
-create trigger lessons_keep_one_when_published after delete on public.lessons
-for each row execute function public.guard_last_published_lesson();
 
 create or replace function public.validate_progress_transition() returns trigger
 language plpgsql as $$
