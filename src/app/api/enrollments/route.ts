@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, hasRole } from "@/lib/auth";
+import { dbErrorResponse } from "@/lib/db-errors";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getLearnerEnrollments } from "@/lib/queries";
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase.from("enrollments").insert({ course_id: courseId, learner_id: learnerId }).select().single();
   if (error?.code === "23505") return NextResponse.json({ error: "Already enrolled", code: "ALREADY_ENROLLED" }, { status: 409 });
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return dbErrorResponse(error);
   await supabase.from("course_activity_log").insert({ course_id: courseId, actor_id: user.id, event: "enrolled", message: instructorEnrolling ? "Learner enrolled by instructor" : "Learner enrolled" , metadata: { learner_id: learnerId } });
   return NextResponse.json(data, { status: 201 });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, hasRole } from "@/lib/auth";
+import { dbErrorResponse } from "@/lib/db-errors";
 
 async function instructorContext() {
   const context = await getAuthContext();
@@ -44,17 +45,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ c
 export async function DELETE(request: NextRequest, context: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await context.params; const auth = await instructorContext();
   if (auth.response) return auth.response;
-  const { supabase, user } = auth.context; const lessonId = request.nextUrl.searchParams.get("lessonId") ?? "";
+  const { supabase } = auth.context; const lessonId = request.nextUrl.searchParams.get("lessonId") ?? "";
   if (!lessonId) return NextResponse.json({ error: "lessonId is required" }, { status: 400 });
-  const { data: lesson } = await supabase.from("lessons").select("id").eq("id", lessonId).eq("course_id", courseId).maybeSingle();
-  if (!lesson) return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
-  const { error } = await supabase.from("lessons").delete().eq("id", lessonId).eq("course_id", courseId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  const { data: remaining } = await supabase.from("lessons").select("id,position").eq("course_id", courseId).order("position");
-  const offset = (remaining ?? []).length + 100;
-  for (const [index, row] of (remaining ?? []).entries()) await supabase.from("lessons").update({ position: offset + index }).eq("id", row.id);
-  for (const [index, row] of (remaining ?? []).entries()) await supabase.from("lessons").update({ position: index + 1, updated_at: new Date().toISOString() }).eq("id", row.id);
-  await supabase.from("courses").update({ updated_at: new Date().toISOString() }).eq("id", courseId);
-  await supabase.from("course_activity_log").insert({ course_id: courseId, actor_id: user!.id, event: "edited", message: "Lesson removed", metadata: { lesson_id: lessonId } });
+  const { error } = await supabase.rpc("delete_lesson", { p_course_id: courseId, p_lesson_id: lessonId });
+  if (error) return dbErrorResponse(error);
   return NextResponse.json({ courseId, lessonId });
 }
