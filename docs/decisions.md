@@ -114,3 +114,41 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
   exactly the courses on the page, mirroring the audited roster-read pattern, and the service key
   never reaches the browser. This decision came out of a production end-to-end pass, which is
   also why it is documented rather than silently patched.
+
+## Decision 10
+
+- **Chose:** Treat row-level security as the boundary that has to hold on its own, and move every
+  multi-step write (lesson completion, lesson reorder, lesson removal) into a Postgres function
+  that runs as one transaction.
+- **Rejected:** What the first version did — route handlers as the first wall with RLS as a
+  roughly-right backup, a learner UPDATE policy on `enrollments` so the completion route could
+  write progress with the learner's own session, and workflows written as a chain of separate
+  supabase-js calls.
+- **Why:** The browser signs in with Supabase directly, so it holds a session and the anon key
+  and can call the REST API without touching my routes. A post-submission review, signed in as
+  the demo learner against the live project, showed what that meant: the learner, enrolled in 6
+  courses, could read activity from 20, including other learners' completions and email
+  addresses, because the activity-log policy compared an unqualified `course_id` that Postgres
+  resolved to the enrollment table's own column. Reading the policies with that in mind turned up
+  more: a learner could insert an already-completed enrollment (the progress trigger only fires on
+  UPDATE), update their own progress, and an instructor could delete a course and cascade its
+  history away. Separately, chained writes had no transaction — a failure between the completion
+  insert and the progress update left them out of step, and two quick clicks on the last two
+  lessons could leave a learner who had finished everything stuck In Progress. Functions fix
+  both at once: learners now hold no write permission on progress at all, `complete_lesson`
+  checks ownership itself and locks the enrollment row, and each workflow commits or rolls back
+  as a unit. The cost is that some logic moved from TypeScript into PL/pgSQL, so I added
+  `npm run test:db` — 43 checks run as each role against a throwaway Postgres.
+- **Later reversed:** this entry reverses the original arrangement described under *Rejected*,
+  which shipped in the submitted version.
+
+## Decision 11
+
+- **Chose:** A learner who has completed a course stays Completed if an instructor later adds a
+  lesson; the roster shows them as, for example, 8 of 9.
+- **Rejected:** Moving them back to In Progress when the course grows.
+- **Why:** The brief's progress sequence only moves forward, and the transition trigger enforces
+  that, so reopening would need a new transition the brief does not describe. It would also
+  quietly change a compliance record: someone who finished the mandatory course last month did
+  finish it. If reopening were wanted, it should be an explicit instructor action that is logged,
+  not a side effect of editing content.

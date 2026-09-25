@@ -65,3 +65,14 @@ changelog), learner progress bars read real lesson-completion counts instead of 
 percentage, instructors see per-course completion in the catalogue, and a hydration mismatch in
 the greeting date was fixed. The branch was verified with lint, production builds, and browser
 checks before it was fast-forward merged into `main`.
+
+## Post-submission security review
+
+After submitting, I reviewed the app the way a reviewer might: signed in as the demo learner and
+called the Supabase REST API directly, bypassing my routes. The learner could read activity for
+every course, which led to a policy-by-policy re-read and four fixes (Decision 10), plus moving
+lesson completion, reorder and removal into transactional Postgres functions. Most of the effort
+went into the local test harness — plain Postgres in Docker with a small stand-in for Supabase's
+`auth` schema — so the policies could be tested as each role without touching the live project. The migration has to be applied in the
+Supabase SQL editor before the updated routes are deployed, because the routes call the new
+functions.

@@ -41,7 +41,9 @@ NOT NULL`, `content text NOT NULL DEFAULT ''`, `position integer NOT NULL CHECK 
 `created_at / updated_at timestamptz NOT NULL DEFAULT now()`, `UNIQUE (course_id, position)`.
 That unique constraint does real work: the database physically cannot hold two lesson #3 in one
 course, which is why reordering is implemented as a collision-free two-phase update — shift the
-positions out of the way first, then set the final ones.
+positions out of the way first, then set the final ones. Both passes run inside the
+`reorder_lessons` function, so a failure between them rolls back instead of leaving lessons at
+the temporary positions; `delete_lesson` closes the gap a removal leaves the same way.
 
 **enrollments** — `id uuid PK`, `course_id uuid NOT NULL → courses`, `learner_id uuid NOT NULL →
 profiles`, `progress progress_status NOT NULL DEFAULT 'not_started'`, `enrolled_at timestamptz
@@ -50,19 +52,28 @@ NOT NULL DEFAULT now()`, `started_at / completed_at / last_progress_at timestamp
 machine. The unique constraint makes enrollment idempotent: a duplicate is a constraint error the
 routes translate into "Already enrolled", and the bulk importer translates into
 `already_enrolled`. `last_progress_at` is the denormalized field the entire alerts feature reads.
+Nobody updates this table directly: a new row must start at `not_started` with empty timestamps
+in a published course, there is no UPDATE policy for any role, and progress moves only inside
+the `complete_lesson` function.
 
 **lesson_completions** — `id uuid PK`, `enrollment_id uuid NOT NULL → enrollments ON DELETE
 CASCADE`, `lesson_id uuid NOT NULL → lessons ON DELETE CASCADE`, `completed_at timestamptz NOT
 NULL DEFAULT now()`, `UNIQUE (enrollment_id, lesson_id)`. Completing a lesson twice is
 impossible; the row count is the learner's "x of y lessons".
 
-**course_activity_log** — `id uuid PK`, `course_id uuid NOT NULL → courses ON DELETE CASCADE`,
+**course_activity_log** — `id uuid PK`, `course_id uuid NOT NULL → courses ON DELETE RESTRICT`,
 `actor_id uuid NULL → profiles`, `event activity_event NOT NULL`, `message text NULL`, `metadata
 jsonb NOT NULL DEFAULT '{}'`, `created_at timestamptz NOT NULL DEFAULT now()`. One row per
 event, with `actor_id` recording who. Comments are rows with `event = 'commented'` — there is no
 separate comments table, because the brief requires comments to live in the same immutable
-history. Immutability comes from RLS: the table has SELECT and INSERT policies and deliberately
-no UPDATE or DELETE policy for any role, instructor included, and no endpoint mutates it.
+history. Immutability comes from three places: the table has SELECT and INSERT policies and no
+UPDATE or DELETE policy for any role, instructor included; the `anon` and `authenticated` roles
+hold no UPDATE, DELETE or TRUNCATE privilege on it at all; and the course foreign key is
+`ON DELETE RESTRICT`. The last one was a post-submission fix — the key used to cascade, so
+deleting a course through the API wiped its history, and instructors held a delete policy on
+courses. Courses are archived, never deleted, so nothing legitimate needed the cascade. Learners
+read course-level events and comments for courses they are enrolled in, plus their own events;
+another learner's completions, enrollments and alert dismissals stay instructor-only.
 
 **alert_dismissals** — `id uuid PK`, `enrollment_id uuid NOT NULL → enrollments ON DELETE
 CASCADE`, `dismissed_by uuid NOT NULL → profiles`, `dismissed_at timestamptz NOT NULL DEFAULT
@@ -93,17 +104,32 @@ goes quiet for another 14 days — no scheduled job required.
 **In the database:** foreign keys and cascade rules; the three uniqueness constraints; the
 position check; enum values; the four indexes; the transition triggers
 `validate_course_status_transition` (only draft→published, published→archived,
-archived→published) and `validate_progress_transition` (only not_started→in_progress,
-in_progress→completed), which fire even for a caller bypassing the app; and RLS on all seven
-tables — "published courses or instructors", "instructors manage courses/lessons", "own or
-instructor enrollments", "own progress writes", "own completions", activity select plus
-append-only insert, instructor-only dismissals.
+archived→published, and never into published without a lesson) and `validate_progress_transition`
+(only not_started→in_progress, in_progress→completed), plus `lessons_keep_one_when_published`,
+which stops a published course losing its last lesson — all of which fire even for a caller
+bypassing the app; RLS on all seven tables — "published courses or instructors", "instructors
+create courses" and "instructors edit courses" (no delete), "instructors manage lessons", "own
+or instructor enrollments", "enroll into published courses", "read own or as instructor"
+completions, activity select scoped per learner plus append-only insert, instructor-only
+dismissals; and three functions that each run a multi-step write as one transaction —
+`complete_lesson`, `reorder_lessons`, `delete_lesson`.
 
-**In the application:** rules that need related rows or request context — an empty course cannot
-publish (that needs a lesson count, so it is a 422 with a message from the route); a completion
-must belong to the caller's enrollment; bulk-enroll classification per address (unknown /
+**In the application:** rules that need request context or only shape the response — the
+route's own empty-course check gives the 422 its message before the trigger would fire;
+bulk-enroll classification per address (unknown /
 already enrolled / newly enrolled); the dashboard's month-scoped counts and 8-week buckets; the
 alert-dismissal snapshot semantics.
+
+**Where I drew the line wrong at first:** I originally treated the route handlers as the first
+wall and RLS as a backup, so RLS only had to be roughly right. But the browser signs in with
+Supabase directly and holds a session that can call the REST API, so RLS is the wall. A review
+after submission found four gaps that only mattered to someone calling the API directly: the
+activity-log policies compared an unqualified `course_id` that Postgres resolved to the
+enrollment's own column (so any enrolled learner could read every course's history, including
+other learners' completions and emails); learners could insert an already-completed enrollment,
+because the progress trigger only fires on UPDATE; learners could update their own progress row;
+and the history cascade above. Migration `20260925000000_security_review_fixes.sql` closes all
+four, and `supabase/tests/security_review.sql` checks each one.
 
 ## Deliberate denormalisation
 

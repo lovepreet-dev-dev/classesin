@@ -10,12 +10,18 @@ on the server, not hidden in the interface — is what shaped everything below.
 
 ## The moving pieces, and why they are arranged this way
 
-**The browser never touches the database.** Next.js App Router pages render the instructor
-workspace, the learner catalogue and dashboard, and the course detail screen. The client
-components are pure interaction: they fetch JSON from this app's own API routes and render the
-result. There is no database query in client code and no service-role key anywhere near the
-bundle. This is the first enforcement boundary — nothing sensitive can leak through the client
-because nothing sensitive is in it.
+**The browser reads and writes data only through this app's routes — but it holds a live
+Supabase session.** Next.js App Router pages render the instructor workspace, the learner
+catalogue and dashboard, and the course detail screen. The client components fetch JSON from
+this app's own API routes and render the result; there is no data query in client code and no
+service-role key anywhere near the bundle. Sign-in is the exception: the login page calls
+Supabase Auth directly, so the browser ends up with a session and the public anon key. That
+session can call Supabase's REST API without going through the routes at all. I originally
+wrote this paragraph as "the browser never touches the database" and treated the routes as the
+first wall; a post-submission review showed that was the wrong mental model. The routes give
+good messages and status codes, but row-level security is the boundary that actually has to
+hold on its own — which is what the security review migration fixed (see *Where the rules
+really live* below).
 
 **One API surface owns every read and write.** Eighteen route handlers under `src/app/api/**`
 are the only code that talks to Postgres. Every handler follows the same discipline: read the
@@ -55,22 +61,52 @@ comparable — the same course id means the same course on every machine.
 
 1. The learner clicks Complete → `POST /api/progress/complete` with the lesson id.
 2. The handler reads the session (401 without one) and loads the caller's profile.
-3. It verifies the lesson belongs to that course and that the caller owns the enrollment.
-4. It inserts the `lesson_completions` row. The `unique(enrollment_id, lesson_id)` constraint
-   turns a double-click into a caught conflict instead of a duplicate record.
-5. It computes the next progress state. The database trigger
-   `enrollments_progress_transition_guard` only allows `not_started → in_progress → completed`,
-   so a one-lesson course cannot jump straight from `not_started` to `completed`: the handler
-   performs the legal intermediate `in_progress` update first, then sets `completed_at` and
-   refreshes `last_progress_at`. This two-step looks odd and is worth defending — the rule lives
-   in the database where it cannot be broken, so the application has to speak the database's
-   legal vocabulary rather than the other way round.
-6. It appends a `lesson_completed` row to `course_activity_log`, which is append-only by policy.
-7. It returns the updated enrollment; the client re-renders the progress bar.
+3. It calls the Postgres function `complete_lesson(lesson_id)` through `supabase.rpc`. Everything
+   below runs inside that one function, so it is a single transaction: if any step fails, none of
+   it happened.
+4. The function resolves the caller from the session (`auth.uid()`), checks the lesson belongs
+   to a published course, and loads the caller's enrollment in that course with `FOR UPDATE`.
+   The row lock matters: two Complete clicks on the last two lessons used to run in parallel,
+   each counted "one lesson left", and the learner finished every lesson but stayed In
+   Progress. Now the second request waits for the first and sees its completion.
+5. It inserts the `lesson_completions` row. The `unique(enrollment_id, lesson_id)` constraint
+   turns a double-click into a 409 instead of a duplicate record.
+6. It computes the next progress state. The trigger `enrollments_progress_transition_guard` only
+   allows `not_started → in_progress → completed`, so the first completion always passes through
+   `in_progress` — even on a one-lesson course, where the function performs both updates back to
+   back. The rule lives in the database, so the code has to speak the database's legal
+   vocabulary rather than the other way round.
+7. It appends a `lesson_completed` row to `course_activity_log` and returns the enrollment.
+8. The route maps any error to a status: the function raises SQLSTATE `KN404`, `KN409` and so on,
+   where the digits are the HTTP status (`src/lib/db-errors.ts`). The client re-renders the
+   progress bar.
 
-The same shape repeats everywhere: a check in the handler, the same rule re-enforced in RLS, and
-a third enforcement in constraints and triggers. If someone bypasses the app with a raw SQL
-client, the first layer disappears — the second and third do not.
+The function is `SECURITY DEFINER` because learners no longer hold any write permission on
+`enrollments` or `lesson_completions` — completing a lesson through this function is the only
+way their progress can move. It does its own identity and ownership checks for that reason.
+
+## Where the rules really live
+
+Every rule has a friendly check in the route handler, but the database enforces it on its own,
+because a signed-in browser can reach the REST API directly:
+
+- **Roles and visibility** — RLS on all seven tables. Learners see published courses, their own
+  enrollments and completions, and — for courses they are enrolled in — course-level events,
+  comments and their own events in the activity log. Never another learner's progress.
+- **State machines** — triggers reject illegal course and progress transitions; publishing (or
+  restoring) a course with no lessons is rejected in the same trigger, and a published course
+  cannot lose its last lesson.
+- **No self-granted progress** — a new enrollment must start at `not_started` in a published
+  course, and there is no UPDATE policy on enrollments for anyone; progress changes only inside
+  `complete_lesson`.
+- **History** — the activity log has SELECT and INSERT policies only, application roles hold no
+  UPDATE or DELETE privilege on it, and its foreign key is `ON DELETE RESTRICT`, so deleting a
+  course cannot cascade the history away. Instructors have no DELETE policy on courses.
+- **Multi-step writes** — lesson completion, reorder and removal are Postgres functions, one
+  transaction each.
+
+`npm run test:db` checks each of these by signing in as a learner and an instructor against a
+throwaway Postgres and attempting what each role must not do.
 
 ## The catalogue pipeline
 

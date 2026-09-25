@@ -267,3 +267,36 @@ immediately because the popover would not open. The pass also surfaced two real 
 learner catalogue row showing "By Kinship" because RLS hides the instructor's profile (fixed by
 extending the audited service-role merge), and an alert badge clamping quiet days to a minimum of
 15. Everything was verified in the browser against the merged result before deploying.
+
+## 15. Post-submission review and security fixes (commits on `fix/security-review`)
+
+### Prompt
+
+“Now all the info and possible questions about the take-home classesin assignment — the project
+is in the classesin folder and the assignment info is in its assignment subfolder.”
+
+Then, after reading the findings: “Could you remove these errors and then make git commits, but
+make the changes in a separate branch.”
+
+### What you got
+
+The first prompt produced interview preparation, but it also produced a review. Instead of
+reading only the docs, it signed in as the demo learner with the public anon key and queried the
+live project read-only: the learner, enrolled in 6 courses, could read activity from 20. The
+cause was an unqualified `course_id` in the activity-log policies that Postgres resolved to the
+enrollment table's own column. Re-reading the other policies with "the browser can call the
+REST API directly" in mind found the rest — self-inserted completed enrollments, a learner
+UPDATE policy on progress, history deletable through a cascade, empty-course publishing only
+checked in the route, and no transactions around multi-step writes. The second prompt produced
+the migration, the three Postgres functions, the route changes, a CSV formula guard, and a
+Docker-based test harness with 43 checks.
+
+### What you corrected
+
+The first draft of `reorder_lessons` had the same bug class it was meant to fix: inside a
+subquery, `where l.id = id` compared the lesson's id with itself, because the bare `id` resolved
+to the nearest table. It was caught on review before the first test run and rewritten with an
+explicitly named column (`req.lesson_id`). To make sure the tests were not passing vacuously,
+the test file was also run against the unfixed schema from `main`, where it fails on the first
+activity-log check. Nothing was applied to the live database: the migration is for me to review
+and paste into the SQL editor, and the `main` branch keeps deploying the old routes until then.
