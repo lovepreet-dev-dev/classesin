@@ -289,7 +289,7 @@ REST API directly" in mind found the rest — self-inserted completed enrollment
 UPDATE policy on progress, history deletable through a cascade, empty-course publishing only
 checked in the route, and no transactions around multi-step writes. The second prompt produced
 the migration, the three Postgres functions, the route changes, a CSV formula guard, and a
-Docker-based test harness with 43 checks.
+Docker-based test harness.
 
 ### What you corrected
 
@@ -300,3 +300,28 @@ explicitly named column (`req.lesson_id`). To make sure the tests were not passi
 the test file was also run against the unfixed schema from `main`, where it fails on the first
 activity-log check. Nothing was applied to the live database: the migration is for me to review
 and paste into the SQL editor, and the `main` branch keeps deploying the old routes until then.
+
+## 16. Checking the fixes against the brief
+
+### Prompt
+
+“These changes should not break the assignment rules mentioned in the assignment folder's files.
+Please read them and compare your changes so that these changes should not break any rule. Even
+though we are not merging into main, the rules should be intact.”
+
+### What you got
+
+A goal-by-goal comparison of the branch against `ASSIGNMENT/README.md`, and
+`supabase/tests/assignment_rules.sql` — 47 checks that walk the ten goals as each role, plus the
+demo seed's reset sequence under the service role.
+
+### What you corrected
+
+The comparison found three places where the first version of the fixes went further than the
+brief and broke it: a trigger that refused to remove the last lesson of a published course
+(goal 3 says lessons can be removed), the empty-course check applied to restores as well as
+publishing (goal 2 says archived courses can be restored), and — through that same trigger — the
+`npm run seed:demo` reset, which deletes lessons while courses are still published. The trigger
+was dropped and the check narrowed to draft → published (Decision 12). The test runner's
+throwaway database password was also replaced with trust authentication, since the brief asks for
+no passwords in the repository.

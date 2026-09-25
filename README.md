@@ -35,7 +35,7 @@ npm run build
 npm run test:db
 ```
 
-`npm run test:db` needs Docker. It loads `supabase/schema.sql` and every migration into a throwaway Postgres container and runs [`supabase/tests/security_review.sql`](./supabase/tests/security_review.sql): 43 checks that sign in as a learner and an instructor and try what each role must not be able to do — read other learners' progress, grant themselves a completion, rewrite or delete history, publish or empty a course — plus the lesson completion, reorder and removal functions.
+`npm run test:db` needs Docker. It loads `supabase/schema.sql` and every migration into a throwaway Postgres container and runs 88 checks that sign in as a learner, an instructor and the seed's service role: [`supabase/tests/assignment_rules.sql`](./supabase/tests/assignment_rules.sql) walks the brief's goals (what each role must be able to do, the state machines, enrollment, history, alerts, and the demo-seed reset), and [`supabase/tests/security_review.sql`](./supabase/tests/security_review.sql) tries what each role must not be able to do — read other learners' progress, grant themselves a completion, rewrite or delete history, publish an empty course.
 
 The build uses webpack because the execution environment used for this take-home blocks Turbopack worker ports.
 

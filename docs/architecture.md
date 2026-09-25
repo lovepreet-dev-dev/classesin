@@ -93,9 +93,9 @@ because a signed-in browser can reach the REST API directly:
 - **Roles and visibility** — RLS on all seven tables. Learners see published courses, their own
   enrollments and completions, and — for courses they are enrolled in — course-level events,
   comments and their own events in the activity log. Never another learner's progress.
-- **State machines** — triggers reject illegal course and progress transitions; publishing (or
-  restoring) a course with no lessons is rejected in the same trigger, and a published course
-  cannot lose its last lesson.
+- **State machines** — triggers reject illegal course and progress transitions, and publishing
+  a draft with no lessons is rejected in the same trigger (goal 4). Restoring an archived course
+  and removing lessons are not restricted beyond what the brief asks (goals 2 and 3).
 - **No self-granted progress** — a new enrollment must start at `not_started` in a published
   course, and there is no UPDATE policy on enrollments for anyone; progress changes only inside
   `complete_lesson`.

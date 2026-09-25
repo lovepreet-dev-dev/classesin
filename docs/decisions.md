@@ -138,7 +138,7 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
   both at once: learners now hold no write permission on progress at all, `complete_lesson`
   checks ownership itself and locks the enrollment row, and each workflow commits or rolls back
   as a unit. The cost is that some logic moved from TypeScript into PL/pgSQL, so I added
-  `npm run test:db` — 43 checks run as each role against a throwaway Postgres.
+  `npm run test:db` — checks run as each role against a throwaway Postgres.
 - **Later reversed:** this entry reverses the original arrangement described under *Rejected*,
   which shipped in the submitted version.
 
@@ -152,3 +152,21 @@ below, not necessarily the last one; add a **Later reversed:** line to whichever
   quietly change a compliance record: someone who finished the mandatory course last month did
   finish it. If reopening were wanted, it should be an explicit instructor action that is logged,
   not a side effect of editing content.
+
+## Decision 12
+
+- **Chose:** Enforce "a course needs a lesson" only where the brief states it — the draft →
+  published transition — and leave restoring an archived course and removing lessons
+  unrestricted.
+- **Rejected:** A stricter invariant, "a published course always has at least one lesson": a
+  trigger that refused to delete the last lesson of a published course, and the same lesson check
+  on archived → published restores.
+- **Why:** The stricter version looked like a natural extension of goal 4, but checking it
+  against the brief showed it broke two other goals: goal 3 says instructors can remove lessons,
+  with no exception, and goal 2 says archived courses can be restored. It also broke the demo
+  reset — `npm run seed:demo` deletes lessons while courses are still published, and triggers
+  fire even for the service role. The brief's own rule (publishing is blocked for an empty
+  course) is enforced in the database; the rest is left as the brief describes it.
+- **Later reversed:** the stricter invariant was the first version of the security-review
+  migration and was removed before that migration was applied to any database; `supabase/tests/assignment_rules.sql`
+  now checks goals 2 and 3 explicitly so it cannot creep back.

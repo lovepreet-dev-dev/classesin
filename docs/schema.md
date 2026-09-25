@@ -104,10 +104,9 @@ goes quiet for another 14 days — no scheduled job required.
 **In the database:** foreign keys and cascade rules; the three uniqueness constraints; the
 position check; enum values; the four indexes; the transition triggers
 `validate_course_status_transition` (only draft→published, published→archived,
-archived→published, and never into published without a lesson) and `validate_progress_transition`
-(only not_started→in_progress, in_progress→completed), plus `lessons_keep_one_when_published`,
-which stops a published course losing its last lesson — all of which fire even for a caller
-bypassing the app; RLS on all seven tables — "published courses or instructors", "instructors
+archived→published, and never draft→published without a lesson) and
+`validate_progress_transition` (only not_started→in_progress, in_progress→completed), both of
+which fire even for a caller bypassing the app; RLS on all seven tables — "published courses or instructors", "instructors
 create courses" and "instructors edit courses" (no delete), "instructors manage lessons", "own
 or instructor enrollments", "enroll into published courses", "read own or as instructor"
 completions, activity select scoped per learner plus append-only insert, instructor-only
