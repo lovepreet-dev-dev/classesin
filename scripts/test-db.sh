@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 schema="${1:-supabase/schema.sql}"
 name="kinship-db-test-$$"
-docker run -d --rm --name "$name" -e POSTGRES_PASSWORD=test postgres:16 >/dev/null
+docker run -d --rm --name "$name" -e POSTGRES_HOST_AUTH_METHOD=trust postgres:16 >/dev/null
 trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
 until docker exec "$name" pg_isready -U postgres -q; do sleep 0.5; done
 sleep 1
